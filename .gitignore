@@ -1,1 +1,60 @@
-/.env
+# =========================================================
+# DEPENDÊNCIAS (Evita o erro de permissão do Vite na Vercel)
+# =========================================================
+node_modules/
+jspm_packages/
+web_modules/
+
+# =========================================================
+# ARQUIVOS DE AMBIENTE E SEGURANÇA (Chaves do Supabase, etc.)
+# =========================================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# =========================================================
+# ARQUIVOS DE COMPILAÇÃO / SAÍDA (Gerados pelo 'npm run build')
+# =========================================================
+dist/
+build/
+out/
+.cache/
+
+# =========================================================
+# DIAGNÓSTICOS E LOGS
+# =========================================================
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# =========================================================
+# PASTAS DE FERRAMENTAS DE DEPLOY (Vercel)
+# =========================================================
+.vercel
+
+# =========================================================
+# CONFIGURAÇÕES DE EDITORES (VS Code / WebStorm)
+# =========================================================
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# =========================================================
+# ARQUIVOS DO SISTEMA OPERACIONAL
+# =========================================================
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
