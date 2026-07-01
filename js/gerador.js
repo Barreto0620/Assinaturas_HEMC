@@ -25,7 +25,7 @@ async function inicializarGerador() {
     const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
     
     if (sessionError || !session) {
-      window.location.href = "login.html";
+      window.location.href = "index.html";
       return;
     }
 
@@ -71,7 +71,7 @@ inicializarGerador();
 if (btnLogout) {
   btnLogout.addEventListener("click", async () => {
     await supabaseClient.auth.signOut();
-    window.location.href = "login.html";
+    window.location.href = "index.html";
   });
 }
 
