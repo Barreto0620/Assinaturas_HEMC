@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gerador de Assinatura | HEMC</title>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/gerador.css">
+</head>
+
+<body>
+
+  <div class="topo">
+    <div class="usuario-info">
+      Logado como <strong id="usuario-nome-topo">-</strong>
+      <span class="badge-departamento" id="usuario-cargo-topo">-</span>
+    </div>
+    <button id="btn-logout" class="btn btn-secundario">Sair</button>
+  </div>
+
+  <div class="container">
+    <h2>Gerador de Assinatura para Imagem (PNG)</h2>
+
+    <label for="nome">Nome</label>
+    <input id="nome" type="text" placeholder="Seu nome completo" disabled>
+    <div class="campo-fixo-hint">🔒 Nome vinculado à sua conta — não pode ser alterado.</div>
+
+    <label for="cargo">Cargo</label>
+    <input id="cargo" type="text" placeholder="Ex: Coordenador de TI" disabled>
+    <div class="campo-fixo-hint">🔒 Cargo vinculado à sua conta — não pode ser alterado.</div>
+
+    <label for="hospital">Hospital</label>
+    <input id="hospital" type="text" value="Hospital Estadual Mário Covas">
+
+    <label for="email">E-mail</label>
+    <input id="email" type="email" disabled>
+    <div class="campo-fixo-hint">🔒 E-mail vinculado à sua conta — não pode ser alterado.</div>
+
+    <label for="telefone">Telefone / Ramal</label>
+    <input id="telefone" type="text" placeholder="(11) 2829-XXXX" disabled>
+    <div class="campo-fixo-hint">🔒 Ramal vinculado à sua conta — não pode ser alterado.</div>
+
+    <label for="endereco">Endereço</label>
+    <input id="endereco" type="text" value="Rua Dr. Henrique Calderazzo, 321, Santo André - SP">
+
+    <button id="btn-gerar" class="btn">Gerar Assinatura</button>
+    <button id="btn-baixar" class="btn btn-secundario" disabled>Baixar PNG</button>
+
+    <div id="wrapper-assinatura" style="margin-top: 20px; display: inline-block;">
+      <div id="assinatura" class="signature-preview">
+        <p>A pré-visualização da sua assinatura aparecerá aqui.</p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/gerador.js"></script>
+</body>
+
+</html>

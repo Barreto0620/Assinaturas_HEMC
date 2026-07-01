@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login | Assinatura HEMC</title>
+
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/login.css">
+
+  <style>
+    /* =========================================================
+       Sincronização Perfeita de Layout (Flexbox + display: contents)
+       ========================================================= */
+    #form-auth {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 🛡️ Por padrão (Tela de Login), mantém o container de cadastro totalmente oculto */
+    #campos-cadastro {
+      display: none;
+    }
+
+    /* 🛡️ Quando o seu auth.js injeta a classe "visivel", desmembramos o container para aplicar a ordenação */
+    #campos-cadastro.visivel {
+      display: contents !important;
+    }
+
+    /* Ordenação cirúrgica dos campos para a tela de Cadastro */
+    .campo-nome { order: 1; }
+    .campo-email { order: 2; }
+    .campo-cargo { order: 3; }
+    .campo-ramal { order: 5; }
+    .campo-senha { order: 6; }
+    .acoes { order: 7; }
+    .mensagem-erro, .mensagem-sucesso { order: 8; }
+
+    /* Customização do Campo de E-mail com Sufixo Fixo Embutido */
+    .email-field-group {
+      display: flex;
+      align-items: center;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      background: #fff;
+      padding-right: 12px;
+      box-sizing: border-box;
+      transition: border-color 0.15s ease-in-out;
+    }
+    .email-field-group:focus-within {
+      border-color: #86b7fe;
+      outline: 0;
+    }
+    .email-suffix {
+      font-weight: 600;
+      color: #6c757d;
+      margin-left: 4px;
+      user-select: none;
+      font-size: 14px;
+    }
+    .email-input {
+      flex: 1;
+      border: none !important;
+      background: transparent !important;
+      padding: 10px 0 10px 12px !important;
+      outline: none !important;
+      margin: 0 !important;
+      box-shadow: none !important;
+    }
+
+    /* Customização do Campo de Ramal com Prefixo Embutido */
+    .ramal-field-group {
+      display: flex;
+      align-items: center;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      background: #fff;
+      padding-left: 12px;
+      box-sizing: border-box;
+      transition: border-color 0.15s ease-in-out;
+    }
+    .ramal-field-group:focus-within {
+      border-color: #86b7fe;
+      outline: 0;
+    }
+    .ramal-prefix {
+      font-weight: bold;
+      color: #495057;
+      margin-right: 2px;
+      user-select: none;
+    }
+    .ramal-input {
+      flex: 1;
+      border: none !important;
+      background: transparent !important;
+      padding: 10px 10px 10px 0 !important;
+      outline: none !important;
+      margin: 0 !important;
+      box-shadow: none !important;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="login-wrapper">
+    <div class="login-card">
+      <h1 id="titulo-form">Entrar</h1>
+      <p class="subtitulo" id="subtitulo-form">Acesse com seu e-mail institucional</p>
+
+      <form id="form-auth">
+        
+        <div class="campo campo-email">
+          <label for="email">E-mail institucional</label>
+          <div class="email-field-group">
+            <input id="email" class="email-input" type="text" required placeholder="nome.sobrenome">
+            <span class="email-suffix">@hemc.fuabc.org.br</span>
+          </div>
+        </div>
+
+        <div class="campo campo-senha">
+          <label for="senha">Senha</label>
+          <input id="senha" type="password" required minlength="6" placeholder="••••••••">
+        </div>
+
+        <div id="campos-cadastro">
+          
+          <div class="campo campo-nome">
+            <label for="nome-completo">Nome completo</label>
+            <input id="nome-completo" type="text" placeholder="Seu nome completo">
+          </div>
+
+          <div class="campo campo-cargo">
+            <label for="cargo">Cargo</label>
+            <input id="cargo" type="text" placeholder="Ex: Analista de TI">
+          </div>
+
+          <div class="campo campo-ramal">
+            <label for="telefone">Ramal</label>
+            <div class="ramal-field-group">
+              <span class="ramal-prefix">2829-</span>
+              <input id="telefone" class="ramal-input" type="text" 
+                     inputmode="numeric" 
+                     maxlength="4" 
+                     placeholder="XXXX">
+            </div>
+          </div>
+
+        </div>
+
+        <div class="acoes">
+          <button type="submit" id="btn-submit" class="btn">Entrar</button>
+        </div>
+
+        <div id="msg-erro" class="mensagem-erro"></div>
+        <div id="msg-sucesso" class="mensagem-sucesso"></div>
+      </form>
+
+      <div class="alternar-modo">
+        <a href="#" id="alternar-modo-link">Não tenho conta. Cadastrar</a>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/auth.js"></script>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const inputNome = document.getElementById("nome-completo");
+      const inputCargo = document.getElementById("cargo");
+      const inputRamal = document.getElementById("telefone");
+      const inputEmail = document.getElementById("email");
+
+      if (inputNome) {
+        inputNome.addEventListener("input", (e) => {
+          e.target.value = e.target.value.replace(/[^A-Za-zÀ-ÿ\s]/g, "");
+        });
+      }
+
+      if (inputCargo) {
+        inputCargo.addEventListener("input", (e) => {
+          e.target.value = e.target.value.replace(/[^A-Za-zÀ-ÿ\s\-\.\,]/g, "");
+        });
+      }
+
+      if (inputRamal) {
+        inputRamal.addEventListener("input", (e) => {
+          e.target.value = e.target.value.replace(/[^0-9]/g, "");
+        });
+      }
+
+      // Higieniza o e-mail: força minúsculas e impede o caractere '@' ou espaços
+      if (inputEmail) {
+        inputEmail.addEventListener("input", (e) => {
+          e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9\.\-\_]/g, "");
+        });
+      }
+    });
+  </script>
+</body>
+
+</html>

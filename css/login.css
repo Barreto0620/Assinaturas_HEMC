@@ -1,0 +1,89 @@
+.login-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.login-card {
+  background: #fff;
+  width: 100%;
+  max-width: 420px;
+  padding: 32px 30px;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+.login-card h1 {
+  font-size: 20px;
+  margin: 0 0 4px 0;
+  color: #0072c6;
+}
+
+.login-card .subtitulo {
+  font-size: 13px;
+  color: #667085;
+  margin-bottom: 22px;
+}
+
+.campo {
+  margin-bottom: 14px;
+}
+
+.campo label {
+  display: block;
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.campo input,
+.campo select {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.campo input:focus,
+.campo select:focus {
+  outline: none;
+  border-color: #0072c6;
+}
+
+.acoes {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.acoes .btn {
+  flex: 1;
+}
+
+.alternar-modo {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 13px;
+}
+
+.alternar-modo a {
+  color: #0072c6;
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.alternar-modo a:hover {
+  text-decoration: underline;
+}
+
+.campos-cadastro {
+  display: none;
+}
+
+.campos-cadastro.visivel {
+  display: block;
+}

@@ -1,0 +1,71 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: linear-gradient(135deg, #eef3f8 0%, #dce7f0 100%);
+  margin: 0;
+  min-height: 100vh;
+  color: #1a1a1a;
+}
+
+.btn {
+  padding: 10px 18px;
+  border: none;
+  background: #0072c6;
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background 0.15s ease;
+}
+
+.btn:hover {
+  background: #005fa3;
+}
+
+.btn:disabled {
+  background: #9fb9cc;
+  cursor: not-allowed;
+}
+
+.btn-secundario {
+  background: #e2e8f0;
+  color: #1a1a1a;
+}
+
+.btn-secundario:hover {
+  background: #cbd5e1;
+}
+
+.mensagem-erro {
+  background: #fdecea;
+  border: 1px solid #f5c2c0;
+  color: #b3261e;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-top: 12px;
+  display: none;
+}
+
+.mensagem-erro.visivel {
+  display: block;
+}
+
+.mensagem-sucesso {
+  background: #e6f4ea;
+  border: 1px solid #b7e1c0;
+  color: #1e7b34;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-top: 12px;
+  display: none;
+}
+
+.mensagem-sucesso.visivel {
+  display: block;
+}
