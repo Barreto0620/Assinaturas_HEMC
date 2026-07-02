@@ -2,50 +2,150 @@
   box-sizing: border-box;
 }
 
+:root {
+  --assina-bg-0: #05070d;
+  --assina-bg-1: #0a0e1a;
+  --assina-bg-2: #0f1526;
+  --assina-surface: #12182b;
+  --assina-surface-hover: #161d33;
+  --assina-border: rgba(120, 150, 210, 0.14);
+  --assina-border-strong: rgba(120, 160, 230, 0.28);
+
+  --assina-blue-500: #3b7dfb;
+  --assina-blue-400: #5b93ff;
+  --assina-blue-glow: rgba(59, 125, 251, 0.35);
+
+  --assina-silver: #c9d3e2;
+  --assina-silver-soft: #8f9bb3;
+
+  --assina-text: #e7ebf5;
+  --assina-text-muted: #8993ab;
+
+  --assina-erro: #ff6b6b;
+  --assina-erro-bg: rgba(255, 107, 107, 0.08);
+  --assina-erro-border: rgba(255, 107, 107, 0.3);
+
+  --assina-sucesso: #4fd48c;
+  --assina-sucesso-bg: rgba(79, 212, 140, 0.08);
+  --assina-sucesso-border: rgba(79, 212, 140, 0.3);
+
+  --assina-shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.4);
+  --assina-shadow-sm: 0 8px 24px rgba(0, 0, 0, 0.35);
+
+  color-scheme: dark;
+}
+
+/* ==================== TEMA CLARO ==================== */
+:root[data-theme="light"] {
+  --assina-bg-0: #eef1f8;
+  --assina-bg-1: #ffffff;
+  --assina-bg-2: #e7ebf5;
+  --assina-surface: #ffffff;
+  --assina-surface-hover: #f3f5fb;
+  --assina-border: rgba(40, 60, 110, 0.12);
+  --assina-border-strong: rgba(40, 70, 140, 0.22);
+
+  --assina-blue-500: #2f66e0;
+  --assina-blue-400: #1d4fc4;
+  --assina-blue-glow: rgba(47, 102, 224, 0.25);
+
+  --assina-silver: #33405c;
+  --assina-silver-soft: #5a6685;
+
+  --assina-text: #131a2c;
+  --assina-text-muted: #5c6683;
+
+  --assina-erro-bg: rgba(217, 48, 48, 0.08);
+  --assina-erro-border: rgba(217, 48, 48, 0.28);
+  --assina-erro: #c62d2d;
+
+  --assina-sucesso-bg: rgba(23, 150, 90, 0.09);
+  --assina-sucesso-border: rgba(23, 150, 90, 0.3);
+  --assina-sucesso: #17965a;
+
+  --assina-shadow-lg: 0 10px 30px rgba(30, 45, 90, 0.10);
+  --assina-shadow-sm: 0 6px 18px rgba(30, 45, 90, 0.08);
+
+  color-scheme: light;
+}
+
+html {
+  height: 100%;
+}
+
 body {
   font-family: 'Segoe UI', Arial, sans-serif;
-  background: linear-gradient(135deg, #eef3f8 0%, #dce7f0 100%);
+  background:
+    radial-gradient(1100px 550px at 15% -10%, rgba(59, 125, 251, 0.10), transparent 60%),
+    radial-gradient(900px 500px at 100% 10%, rgba(120, 160, 230, 0.07), transparent 55%),
+    linear-gradient(160deg, var(--assina-bg-0) 0%, var(--assina-bg-1) 45%, var(--assina-bg-2) 100%);
+  background-attachment: fixed;
   margin: 0;
   min-height: 100vh;
-  color: #1a1a1a;
+  color: var(--assina-text);
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+:root[data-theme="light"] body {
+  background:
+    radial-gradient(1100px 550px at 15% -10%, rgba(47, 102, 224, 0.06), transparent 60%),
+    radial-gradient(900px 500px at 100% 10%, rgba(120, 160, 230, 0.08), transparent 55%),
+    linear-gradient(160deg, var(--assina-bg-0) 0%, var(--assina-bg-1) 45%, var(--assina-bg-2) 100%);
 }
 
 .btn {
   padding: 10px 18px;
-  border: none;
-  background: #0072c6;
-  color: #fff;
-  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(135deg, var(--assina-blue-500), #2a5fd9);
+  color: #f4f7ff;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
-  transition: background 0.15s ease;
+  letter-spacing: 0.2px;
+  box-shadow: 0 4px 16px rgba(59, 125, 251, 0.25);
+  transition: filter 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .btn:hover {
-  background: #005fa3;
+  filter: brightness(1.08);
+  box-shadow: 0 6px 22px var(--assina-blue-glow);
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: translateY(0);
 }
 
 .btn:disabled {
-  background: #9fb9cc;
+  background: #232a3d;
+  color: var(--assina-text-muted);
+  box-shadow: none;
   cursor: not-allowed;
+  filter: none;
+  transform: none;
 }
 
 .btn-secundario {
-  background: #e2e8f0;
-  color: #1a1a1a;
+  background: var(--assina-surface);
+  color: var(--assina-text);
+  border: 1px solid var(--assina-border);
+  box-shadow: none;
 }
 
 .btn-secundario:hover {
-  background: #cbd5e1;
+  background: var(--assina-surface-hover);
+  border-color: var(--assina-border-strong);
+  box-shadow: none;
+  filter: none;
 }
 
 .mensagem-erro {
-  background: #fdecea;
-  border: 1px solid #f5c2c0;
-  color: #b3261e;
+  background: var(--assina-erro-bg);
+  border: 1px solid var(--assina-erro-border);
+  color: var(--assina-erro);
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 13px;
   margin-top: 12px;
   display: none;
@@ -56,11 +156,11 @@ body {
 }
 
 .mensagem-sucesso {
-  background: #e6f4ea;
-  border: 1px solid #b7e1c0;
-  color: #1e7b34;
+  background: var(--assina-sucesso-bg);
+  border: 1px solid var(--assina-sucesso-border);
+  color: var(--assina-sucesso);
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 13px;
   margin-top: 12px;
   display: none;
@@ -68,4 +168,55 @@ body {
 
 .mensagem-sucesso.visivel {
   display: block;
+}
+
+/* ==================== Botão de alternância de tema ==================== */
+.theme-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 8px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--assina-border);
+  background: var(--assina-bg-1);
+  cursor: pointer;
+  color: var(--assina-text);
+  font-size: 12px;
+  font-weight: 600;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.theme-toggle:hover {
+  border-color: var(--assina-border-strong);
+}
+
+.theme-toggle .theme-toggle-track {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--assina-bg-2);
+  border: 1px solid var(--assina-border);
+  flex-shrink: 0;
+}
+
+.theme-toggle .theme-toggle-thumb {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--assina-blue-500), #2a5fd9);
+  transition: transform 0.2s ease;
+}
+
+:root[data-theme="light"] .theme-toggle .theme-toggle-thumb {
+  transform: translateX(16px);
+}
+
+.theme-toggle .theme-toggle-icon {
+  display: inline-flex;
+  color: var(--assina-silver-soft);
 }

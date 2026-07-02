@@ -6,6 +6,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gerador de Assinatura | HEMC</title>
 
+  <script>
+    // Aplica o tema salvo antes da renderização, evitando "flash" de tema errado.
+    (function () {
+      try {
+        var temaSalvo = localStorage.getItem('hemc-tema');
+        if (temaSalvo === 'light' || temaSalvo === 'dark') {
+          document.documentElement.setAttribute('data-theme', temaSalvo);
+        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      } catch (e) { /* localStorage indisponível: mantém o tema padrão */ }
+    })();
+  </script>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
   <link rel="stylesheet" href="css/base.css">
@@ -14,50 +28,316 @@
 
 <body>
 
-  <div class="topo">
-    <div class="usuario-info">
-      Logado como <strong id="usuario-nome-topo">-</strong>
-      <span class="badge-departamento" id="usuario-cargo-topo">-</span>
+  <div class="app-shell">
+
+    <!-- ================= Barra superior ================= -->
+    <div class="topo">
+      <div class="topo-marca">
+        <span class="topo-logo-dot"></span>
+        <div>
+          <div class="topo-titulo">HEMC · Gerador de Assinatura</div>
+          <div class="topo-subtitulo">Hospital Estadual Mário Covas</div>
+        </div>
+      </div>
+
+      <div class="topo-acoes">
+        <div class="usuario-info">
+          Logado como <strong id="usuario-nome-topo">-</strong>
+          <span class="badge-departamento" id="usuario-cargo-topo">-</span>
+        </div>
+
+        <button type="button" class="theme-toggle" id="btn-tema" aria-label="Alternar tema claro/escuro">
+          <span class="theme-toggle-icon" id="theme-toggle-icon-sol" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path
+                d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41">
+              </path>
+            </svg>
+          </span>
+          <span class="theme-toggle-track">
+            <span class="theme-toggle-thumb"></span>
+          </span>
+          <span id="theme-toggle-label">Escuro</span>
+        </button>
+
+        <button id="btn-logout" class="btn btn-secundario">Sair</button>
+      </div>
     </div>
-    <button id="btn-logout" class="btn btn-secundario">Sair</button>
+
+    <!-- ================= Layout principal ================= -->
+    <div class="layout-principal">
+
+      <!-- ---------- Coluna esquerda: formulário ---------- -->
+      <div class="painel-form">
+        <h2>Gerador de Assinatura</h2>
+        <p class="painel-form-desc">Preencha os campos abaixo para gerar sua assinatura oficial em PNG, pronta para
+          usar no Outlook ou Skymail.</p>
+
+        <div class="grupo-campo">
+          <label for="nome">Nome</label>
+          <input id="nome" type="text" placeholder="Seu nome completo" disabled>
+          <div class="campo-fixo-hint">🔒 Nome vinculado à sua conta — não pode ser alterado.</div>
+        </div>
+
+        <div class="grupo-campo">
+          <label for="cargo">Cargo</label>
+          <input id="cargo" type="text" placeholder="Ex: Coordenador de TI" disabled>
+          <div class="campo-fixo-hint">🔒 Cargo vinculado à sua conta — não pode ser alterado.</div>
+        </div>
+
+        <div class="grupo-campo">
+          <label for="hospital">Hospital</label>
+          <input id="hospital" type="text" value="Hospital Estadual Mário Covas">
+        </div>
+
+        <div class="grupo-campo">
+          <label for="email">E-mail</label>
+          <input id="email" type="email" disabled>
+          <div class="campo-fixo-hint">🔒 E-mail vinculado à sua conta — não pode ser alterado.</div>
+        </div>
+
+        <div class="grupo-campo">
+          <label for="telefone">Telefone / Ramal</label>
+          <input id="telefone" type="text" placeholder="(11) 2829-XXXX" disabled>
+          <div class="campo-fixo-hint">🔒 Ramal vinculado à sua conta — não pode ser alterado.</div>
+        </div>
+
+        <div class="grupo-campo">
+          <label for="endereco">Endereço</label>
+          <input id="endereco" type="text" value="Rua Dr. Henrique Calderazzo, 321, Santo André - SP">
+        </div>
+
+        <div class="painel-form-acoes">
+          <button id="btn-gerar" class="btn">Gerar Assinatura</button>
+          <button id="btn-baixar" class="btn btn-secundario" disabled>Baixar PNG</button>
+        </div>
+      </div>
+
+      <!-- ---------- Coluna direita: preview + ajuda ---------- -->
+      <div class="coluna-direita">
+
+        <!-- Card de pré-visualização -->
+        <div class="cartao-preview">
+          <div class="cartao-preview-header">
+            <h3>Pré-visualização</h3>
+            <span>Exportada exatamente como exibida abaixo</span>
+          </div>
+          <div id="wrapper-assinatura">
+            <div id="assinatura" class="signature-preview">
+              <p>A pré-visualização da sua assinatura aparecerá aqui.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= Seção de ajuda em vídeo ================= -->
+        <div class="hemc-ajuda-secao">
+          <p class="hemc-ajuda-titulo">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M9.5 9a2.5 2.5 0 0 1 4.9.75c0 1.5-2 2-2 3.25"></path>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            Precisa de ajuda para configurar?
+          </p>
+          <p class="hemc-ajuda-subtitulo">
+            Assista aos vídeos de passo a passo para aplicar sua assinatura no Outlook ou no Skymail.
+          </p>
+
+          <div class="hemc-ajuda-grid">
+            <button class="hemc-video-btn" data-modal="modal-outlook">
+              <span class="hemc-video-btn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+              </span>
+              <span class="hemc-video-btn-texto">
+                <span class="hemc-video-btn-titulo">Configurar no Outlook</span>
+                <span class="hemc-video-btn-desc">Vídeo tutorial passo a passo</span>
+              </span>
+            </button>
+
+            <button class="hemc-video-btn" data-modal="modal-skymail">
+              <span class="hemc-video-btn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+              </span>
+              <span class="hemc-video-btn-texto">
+                <span class="hemc-video-btn-titulo">Configurar no Skymail</span>
+                <span class="hemc-video-btn-desc">Vídeo tutorial passo a passo</span>
+              </span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
   </div>
 
-  <div class="container">
-    <h2>Gerador de Assinatura para Imagem (PNG)</h2>
+  <!-- ================= Modal: Outlook ================= -->
+  <div class="hemc-overlay" id="modal-outlook" aria-hidden="true">
+    <div class="hemc-modal" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-outlook">
+      <div class="hemc-modal-header">
+        <h3 id="titulo-modal-outlook">📧 Como configurar a assinatura no Outlook</h3>
+        <button class="hemc-modal-fechar" data-fechar>&times;</button>
+      </div>
+      <div class="hemc-modal-body">
+        <div class="hemc-video-wrap">
+          <video controls preload="metadata" src="img/configuracao_assinatura_outlook.mp4">
+            Seu navegador não suporta a exibição deste vídeo.
+          </video>
+        </div>
 
-    <label for="nome">Nome</label>
-    <input id="nome" type="text" placeholder="Seu nome completo" disabled>
-    <div class="campo-fixo-hint">🔒 Nome vinculado à sua conta — não pode ser alterado.</div>
+        <div class="hemc-aviso-glpi">
+          <span class="hemc-aviso-glpi-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
+              </path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+          </span>
+          <div class="hemc-aviso-glpi-texto">
+            <p>Ainda com dificuldades para configurar? <strong>Abra um chamado no GLPI</strong> e a equipe de TI vai
+              te ajudar.</p>
+            <a class="hemc-btn-glpi" href="https://glpi.hemc.local/" target="_blank" rel="noopener noreferrer">
+              Abrir chamado no GLPI
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+              </svg>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    <label for="cargo">Cargo</label>
-    <input id="cargo" type="text" placeholder="Ex: Coordenador de TI" disabled>
-    <div class="campo-fixo-hint">🔒 Cargo vinculado à sua conta — não pode ser alterado.</div>
+  <!-- ================= Modal: Skymail ================= -->
+  <div class="hemc-overlay" id="modal-skymail" aria-hidden="true">
+    <div class="hemc-modal" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-skymail">
+      <div class="hemc-modal-header">
+        <h3 id="titulo-modal-skymail">✉️ Como configurar a assinatura no Skymail</h3>
+        <button class="hemc-modal-fechar" data-fechar>&times;</button>
+      </div>
+      <div class="hemc-modal-body">
+        <div class="hemc-video-wrap">
+          <video controls preload="metadata" src="img/configuracao_assinatura_skymail.mp4">
+            Seu navegador não suporta a exibição deste vídeo.
+          </video>
+        </div>
 
-    <label for="hospital">Hospital</label>
-    <input id="hospital" type="text" value="Hospital Estadual Mário Covas">
-
-    <label for="email">E-mail</label>
-    <input id="email" type="email" disabled>
-    <div class="campo-fixo-hint">🔒 E-mail vinculado à sua conta — não pode ser alterado.</div>
-
-    <label for="telefone">Telefone / Ramal</label>
-    <input id="telefone" type="text" placeholder="(11) 2829-XXXX" disabled>
-    <div class="campo-fixo-hint">🔒 Ramal vinculado à sua conta — não pode ser alterado.</div>
-
-    <label for="endereco">Endereço</label>
-    <input id="endereco" type="text" value="Rua Dr. Henrique Calderazzo, 321, Santo André - SP">
-
-    <button id="btn-gerar" class="btn">Gerar Assinatura</button>
-    <button id="btn-baixar" class="btn btn-secundario" disabled>Baixar PNG</button>
-
-    <div id="wrapper-assinatura" style="margin-top: 20px; display: inline-block;">
-      <div id="assinatura" class="signature-preview">
-        <p>A pré-visualização da sua assinatura aparecerá aqui.</p>
+        <div class="hemc-aviso-glpi">
+          <span class="hemc-aviso-glpi-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
+              </path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+          </span>
+          <div class="hemc-aviso-glpi-texto">
+            <p>Ainda com dificuldades para configurar? <strong>Abra um chamado no GLPI</strong> e a equipe de TI vai
+              te ajudar.</p>
+            <a class="hemc-btn-glpi" href="https://glpi.hemc.local/" target="_blank" rel="noopener noreferrer">
+              Abrir chamado no GLPI
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+              </svg>
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
   <script type="module" src="js/gerador.js"></script>
+
+  <script>
+    // ================= Controle de tema (claro/escuro) =================
+    (function () {
+      var root = document.documentElement;
+      var btn = document.getElementById('btn-tema');
+      var label = document.getElementById('theme-toggle-label');
+
+      function temaAtual() {
+        return root.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+      }
+
+      function atualizarLabel() {
+        label.textContent = temaAtual() === 'light' ? 'Claro' : 'Escuro';
+      }
+
+      btn.addEventListener('click', function () {
+        var novo = temaAtual() === 'light' ? 'dark' : 'light';
+        if (novo === 'dark') {
+          root.removeAttribute('data-theme');
+        } else {
+          root.setAttribute('data-theme', 'light');
+        }
+        try { localStorage.setItem('hemc-tema', novo); } catch (e) { /* ignora */ }
+        atualizarLabel();
+      });
+
+      atualizarLabel();
+    })();
+
+    // ================= Controle dos modais de ajuda =================
+    (function () {
+      const botoesAbrir = document.querySelectorAll('[data-modal]');
+      const overlays = document.querySelectorAll('.hemc-overlay');
+
+      function abrirModal(id) {
+        const overlay = document.getElementById(id);
+        if (!overlay) return;
+        overlay.classList.add('aberto');
+        overlay.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function fecharModal(overlay) {
+        const video = overlay.querySelector('video');
+        if (video) {
+          video.pause();
+        }
+        overlay.classList.remove('aberto');
+        overlay.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+      }
+
+      botoesAbrir.forEach((btn) => {
+        btn.addEventListener('click', () => abrirModal(btn.dataset.modal));
+      });
+
+      overlays.forEach((overlay) => {
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) fecharModal(overlay);
+        });
+
+        overlay.querySelector('[data-fechar]')?.addEventListener('click', () => fecharModal(overlay));
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          overlays.forEach((overlay) => {
+            if (overlay.classList.contains('aberto')) fecharModal(overlay);
+          });
+        }
+      });
+    })();
+  </script>
 </body>
 
 </html>
