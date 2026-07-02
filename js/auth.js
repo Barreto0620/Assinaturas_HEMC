@@ -1,182 +1,445 @@
 import { supabaseClient } from './supabaseClient.js';
 
 // =========================================================
-// Lógica da tela de login / cadastro
+// Módulo de Autenticação Institucional — HEMC/FUABC
+// Responsável por: login, validação de conta ativa,
+// sincronização de perfil, redefinição obrigatória de senha
+// no primeiro acesso e tratamento de sessão.
 // =========================================================
 
-const camposCadastro = document.getElementById("campos-cadastro");
-const linkAlternarModo = document.getElementById("alternar-modo-link");
-const tituloForm = document.getElementById("titulo-form");
-const subtituloForm = document.getElementById("subtitulo-form");
-const btnSubmit = document.getElementById("btn-submit");
-const msgErro = document.getElementById("msg-erro");
-const msgSucesso = document.getElementById("msg-sucesso");
+const DOMINIO_INSTITUCIONAL = "@hemc.fuabc.org.br";
+const PREFIXO_RAMAL = "(11) 2829-";
+const REDIRECT_URL = "gerador.html";
 
-let modoCadastro = false;
+const els = {
+  form: document.getElementById("form-auth"),
+  btnSubmit: document.getElementById("btn-submit"),
+  msgErro: document.getElementById("msg-erro"),
+  msgSucesso: document.getElementById("msg-sucesso"),
+  nome: document.getElementById("nome"),
+  email: document.getElementById("email"),
+  senha: document.getElementById("senha"),
+  cargo: document.getElementById("cargo"),
+  telefone: document.getElementById("telefone"),
 
-// -------- Utilidades de UI --------
+  // Modal de redefinição de senha (primeiro acesso)
+  modalOverlay: document.getElementById("modal-redefinir-senha-overlay"),
+  formRedefinicao: document.getElementById("form-redefinir-senha"),
+  novaSenha: document.getElementById("nova-senha"),
+  confirmarSenha: document.getElementById("confirmar-senha"),
+  btnConfirmarRedefinicao: document.getElementById("btn-confirmar-redefinicao"),
+  msgErroRedefinicao: document.getElementById("msg-erro-redefinicao"),
+};
+
+// =========================================================
+// 1. Utilidades de UI
+// =========================================================
+
 function mostrarErro(texto) {
-  msgSucesso.classList.remove("visivel");
-  msgErro.textContent = texto;
-  msgErro.classList.add("visivel");
+  els.msgSucesso?.classList.remove("visivel");
+  if (!els.msgErro) return;
+  els.msgErro.textContent = texto;
+  els.msgErro.classList.add("visivel");
 }
 
 function mostrarSucesso(texto) {
-  msgErro.classList.remove("visivel");
-  msgSucesso.textContent = texto;
-  msgSucesso.classList.add("visivel");
+  els.msgErro?.classList.remove("visivel");
+  if (!els.msgSucesso) return;
+  els.msgSucesso.textContent = texto;
+  els.msgSucesso.classList.add("visivel");
 }
 
 function limparMensagens() {
-  msgErro.classList.remove("visivel");
-  msgSucesso.classList.remove("visivel");
+  els.msgErro?.classList.remove("visivel");
+  els.msgSucesso?.classList.remove("visivel");
 }
 
-function alternarModo(paraCadastro) {
-  modoCadastro = paraCadastro;
-  limparMensagens();
+function setCarregando(carregando) {
+  if (!els.btnSubmit) return;
+  els.btnSubmit.disabled = carregando;
+  els.btnSubmit.textContent = carregando ? "Validando..." : "Entrar";
+}
 
-  // Inputs para alternar obrigatoriedade dinamicamente
-  const inputNome = document.getElementById("nome-completo");
-  const inputCargo = document.getElementById("cargo");
-  const inputTelefone = document.getElementById("telefone");
+function mostrarErroRedefinicao(texto) {
+  if (!els.msgErroRedefinicao) return;
+  els.msgErroRedefinicao.textContent = texto;
+  els.msgErroRedefinicao.classList.add("visivel");
+}
 
-  if (modoCadastro) {
-    camposCadastro.classList.add("visivel");
-    tituloForm.textContent = "Criar conta";
-    subtituloForm.textContent = "Cadastre-se com seu e-mail institucional";
-    btnSubmit.textContent = "Cadastrar";
-    linkAlternarModo.textContent = "Já tenho conta. Entrar";
+function limparErroRedefinicao() {
+  els.msgErroRedefinicao?.classList.remove("visivel");
+}
 
-    if (inputNome) inputNome.required = true;
-    if (inputCargo) inputCargo.required = true;
-    if (inputTelefone) inputTelefone.required = true;
-  } else {
-    camposCadastro.classList.remove("visivel");
-    tituloForm.textContent = "Entrar";
-    subtituloForm.textContent = "Acesse com seu e-mail institucional";
-    btnSubmit.textContent = "Entrar";
-    linkAlternarModo.textContent = "Não tenho conta. Cadastrar";
+function setCarregandoRedefinicao(carregando) {
+  if (!els.btnConfirmarRedefinicao) return;
+  els.btnConfirmarRedefinicao.disabled = carregando;
+  els.btnConfirmarRedefinicao.textContent = carregando ? "Salvando..." : "Salvar e continuar";
+}
 
-    if (inputNome) inputNome.required = false;
-    if (inputCargo) inputCargo.required = false;
-    if (inputTelefone) inputTelefone.required = false;
+function abrirModalRedefinicao() {
+  els.modalOverlay?.classList.add("visivel");
+}
+
+function fecharModalRedefinicao() {
+  els.modalOverlay?.classList.remove("visivel");
+}
+
+// =========================================================
+// 2. Log estruturado (facilita debug em produção)
+// =========================================================
+
+function log(etapa, detalhe = "") {
+  console.info(`[auth] ${etapa}`, detalhe);
+}
+
+function logErro(etapa, erro) {
+  console.error(`[auth] ${etapa}`, erro?.message || erro);
+}
+
+// =========================================================
+// 3. Coleta e validação dos dados do formulário
+// =========================================================
+
+function coletarDadosFormulario() {
+  const emailPrefixo = els.email?.value.trim() ?? "";
+  const senha = els.senha?.value ?? "";
+  const nomeCompleto = els.nome?.value.trim() ?? "";
+  const cargo = els.cargo?.value.trim() ?? "";
+  const ramal = els.telefone?.value.trim() ?? "";
+
+  return {
+    emailPrefixo,
+    email: emailPrefixo ? `${emailPrefixo}${DOMINIO_INSTITUCIONAL}` : "",
+    senha,
+    nomeCompleto,
+    cargo,
+    ramal,
+    telefoneFormatado: ramal ? `${PREFIXO_RAMAL}${ramal}` : "",
+  };
+}
+
+function validarDados({ emailPrefixo, cargo, ramal, senha, nomeCompleto }) {
+  if (!emailPrefixo) {
+    return "Por favor, insira o seu e-mail institucional.";
   }
+  if (!senha) {
+    return "Por favor, insira a sua senha.";
+  }
+  if (!nomeCompleto || nomeCompleto.length < 3) {
+    return "Por favor, insira o seu nome completo.";
+  }
+  if (!cargo) {
+    return "Por favor, informe o seu Cargo institucional.";
+  }
+  if (!ramal || ramal.length !== 4 || !/^\d{4}$/.test(ramal)) {
+    return "Por favor, insira um Ramal válido contendo exatamente 4 dígitos.";
+  }
+  return null;
 }
 
-linkAlternarModo.addEventListener("click", (e) => {
-  e.preventDefault();
-  alternarModo(!modoCadastro);
-});
+function validarNovaSenha(novaSenha, confirmarSenha) {
+  if (!novaSenha || novaSenha.length < 6) {
+    return "A nova senha deve ter no mínimo 6 caracteres.";
+  }
+  if (novaSenha !== confirmarSenha) {
+    return "As senhas não coincidem. Verifique e tente novamente.";
+  }
+  return null;
+}
 
-// -------- Envio do formulário (login OU cadastro) --------
-const formAuth = document.getElementById("form-auth");
-if (formAuth) {
-  formAuth.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    limparMensagens();
-    btnSubmit.disabled = true;
+// =========================================================
+// 4. Autenticação
+// =========================================================
 
-    // Recupera o prefixo digitado e monta o e-mail corporativo completo profissionalmente
-    const emailPrefixo = document.getElementById("email").value.trim();
-    const email = emailPrefixo ? `${emailPrefixo}@hemc.fuabc.org.br` : "";
-    const senha = document.getElementById("senha").value;
+async function autenticar(email, senha) {
+  const { data, error } = await supabaseClient.auth.signInWithPassword({
+    email,
+    password: senha,
+  });
 
-    if (!emailPrefixo) {
-      mostrarErro("Por favor, insira o seu e-mail institucional.");
-      btnSubmit.disabled = false;
+  if (error) throw error;
+  if (!data?.user) throw new Error("Falha inesperada: usuário não retornado pela autenticação.");
+
+  return data.user;
+}
+
+// =========================================================
+// 5. Validação de conta ativa e verificação de primeiro acesso
+// Verifica se o perfil existe, não está desativado/bloqueado e
+// se a senha já foi redefinida (primeiro acesso).
+// Tolerante à ausência das colunas "ativo" e "senha_redefinida"
+// (não quebra caso não existam — trata como já liberado/redefinido).
+// =========================================================
+
+async function validarContaAtiva(usuarioId) {
+  const { data: perfil, error } = await supabaseClient
+    .from("profiles")
+    .select("id, ativo, senha_redefinida")
+    .eq("id", usuarioId)
+    .maybeSingle();
+
+  if (error) {
+    // Se alguma coluna não existir ou houver falha de leitura,
+    // não bloqueamos o login — apenas registramos o aviso e
+    // assumimos os valores mais permissivos (não quebra o fluxo).
+    logErro("validarContaAtiva:leitura", error);
+    return { ativo: true, senhaRedefinida: true, perfil: null };
+  }
+
+  if (perfil && perfil.ativo === false) {
+    return { ativo: false, senhaRedefinida: true, perfil };
+  }
+
+  // Se a coluna "senha_redefinida" não existir na linha (undefined),
+  // tratamos como já redefinida para não travar contas antigas.
+  const senhaRedefinida = perfil?.senha_redefinida === undefined
+    ? true
+    : perfil.senha_redefinida === true;
+
+  return { ativo: true, senhaRedefinida, perfil };
+}
+
+// =========================================================
+// 6. Sincronização do perfil (tabela "profiles")
+// Único ponto de persistência de nome/cargo/telefone — não usamos
+// mais auth.updateUser() para evitar duplicidade de fontes.
+//
+// IMPORTANTE: os campos abaixo devem existir na tabela "profiles":
+//   id (uuid, PK, = auth.users.id)
+//   nome_completo (text)
+//   cargo (text)
+//   telefone (text)
+//   senha_redefinida (boolean, default false)  <-- necessário para o
+//     fluxo de redefinição obrigatória de senha no primeiro acesso.
+// Caso queira manter um registro de última atualização, crie a coluna
+// "atualizado_em" (timestamptz) na tabela antes de reativar esse campo.
+// =========================================================
+
+async function sincronizarPerfil(usuarioId, nomeCompleto, cargo, telefoneFormatado) {
+  const { error } = await supabaseClient
+    .from("profiles")
+    .upsert(
+      {
+        id: usuarioId,
+        nome_completo: nomeCompleto,
+        cargo,
+        telefone: telefoneFormatado,
+      },
+      { onConflict: "id" }
+    );
+
+  if (error) {
+    logErro("sincronizarPerfil", error);
+    throw new Error("Não foi possível sincronizar os dados do perfil institucional.");
+  }
+
+  log("sincronizarPerfil:sucesso", { usuarioId, cargo });
+}
+
+// =========================================================
+// 6.1 Marca o perfil como tendo passado pela redefinição de senha
+// =========================================================
+
+async function marcarSenhaRedefinida(usuarioId) {
+  const { error } = await supabaseClient
+    .from("profiles")
+    .update({ senha_redefinida: true })
+    .eq("id", usuarioId);
+
+  if (error) {
+    logErro("marcarSenhaRedefinida", error);
+    throw new Error("Não foi possível concluir a atualização de segurança da sua conta.");
+  }
+
+  log("marcarSenhaRedefinida:sucesso", { usuarioId });
+}
+
+// =========================================================
+// 7. Tradução de erros técnicos para mensagens amigáveis
+// =========================================================
+
+function traduzirErro(erro) {
+  const msg = erro?.message || "";
+
+  const mapa = {
+    "Invalid login credentials": "E-mail institucional ou senha inválidos.",
+    "Email not confirmed": "Por favor, confirme seu e-mail corporativo antes de prosseguir.",
+    "User not found": "Usuário não encontrado na base institucional.",
+    "Too many requests": "Muitas tentativas em sequência. Aguarde alguns instantes e tente novamente.",
+    "Network request failed": "Falha de conexão. Verifique sua internet e tente novamente.",
+    "New password should be different from the old password.": "A nova senha deve ser diferente da senha atual.",
+    "Password should be at least 6 characters.": "A nova senha deve ter no mínimo 6 caracteres.",
+  };
+
+  return mapa[msg] || "Ocorreu um erro ao prosseguir. Verifique suas informações e tente novamente.";
+}
+
+// =========================================================
+// 8. Redirecionamento
+// =========================================================
+
+function redirecionar(destino = REDIRECT_URL, atraso = 900) {
+  setTimeout(() => {
+    window.location.href = destino;
+  }, atraso);
+}
+
+// =========================================================
+// 9. Fluxo principal de login (orquestração)
+// =========================================================
+
+// Guarda o usuário autenticado enquanto aguarda a redefinição
+// obrigatória de senha no primeiro acesso.
+let usuarioPendenteRedefinicao = null;
+
+async function processarLogin(evento) {
+  evento.preventDefault();
+  limparMensagens();
+  setCarregando(true);
+
+  const dados = coletarDadosFormulario();
+  const erroValidacao = validarDados(dados);
+
+  if (erroValidacao) {
+    mostrarErro(erroValidacao);
+    setCarregando(false);
+    return;
+  }
+
+  try {
+    log("autenticar:inicio", { email: dados.email });
+    const usuario = await autenticar(dados.email, dados.senha);
+    log("autenticar:sucesso", { id: usuario.id });
+
+    const { ativo, senhaRedefinida } = await validarContaAtiva(usuario.id);
+    if (!ativo) {
+      await supabaseClient.auth.signOut();
+      mostrarErro("Sua conta está desativada. Entre em contato com o setor de TI.");
+      setCarregando(false);
       return;
     }
 
-    try {
-      if (modoCadastro) {
-        const nomeCompleto = document.getElementById("nome-completo").value.trim();
-        const cargo = document.getElementById("cargo").value.trim();
-        const ramalDigitado = document.getElementById("telefone").value.trim();
+    await sincronizarPerfil(usuario.id, dados.nomeCompleto, dados.cargo, dados.telefoneFormatado);
 
-        if (!nomeCompleto || !cargo || !ramalDigitado) {
-          mostrarErro("Preencha todos os campos obrigatórios.");
-          btnSubmit.disabled = false;
-          return;
-        }
-
-        // Formata o ramal juntando o prefixo visual fixo do seu HTML
-        const telefoneFinal = `(11) 2829-${ramalDigitado}`;
-
-        // 1. Cria o usuário na autenticação do Supabase com o e-mail completo formatado
-        const { data, error } = await supabaseClient.auth.signUp({
-          email,
-          password: senha,
-          options: {
-            data: {
-              nome_completo: nomeCompleto,
-              cargo: cargo,
-              telefone: telefoneFinal,
-            },
-          },
-        });
-
-        if (error) throw error;
-
-        // 2. Insere os dados complementares na tabela pública 'profiles'
-        if (data?.user) {
-          const { error: profileError } = await supabaseClient
-            .from("profiles")
-            .insert({
-              id: data.user.id, // Vincula com o UUID gerado no Auth
-              nome_completo: nomeCompleto,
-              cargo: cargo,
-              telefone: telefoneFinal
-            });
-
-          if (profileError) {
-            console.error("Erro ao salvar perfil na tabela pública:", profileError.message);
-          }
-        }
-
-        // Como a confirmação de e-mail está desativada, exibe o sucesso e joga pra dentro
-        mostrarSucesso("Cadastro realizado com sucesso! Entrando...");
-        setTimeout(() => {
-          window.location.href = "gerador.html";
-        }, 1500);
-
-      } else {
-        // --- MODO LOGIN ---
-        // Realiza a autenticação utilizando o e-mail corporativo completo montado
-        const { error } = await supabaseClient.auth.signInWithPassword({
-          email,
-          password: senha,
-        });
-
-        if (error) throw error;
-
-        mostrarSucesso("Login efetuado! Entrando...");
-        setTimeout(() => {
-          window.location.href = "gerador.html";
-        }, 1000);
-      }
-    } catch (err) {
-      mostrarErro(traduzirErro(err.message));
-    } finally {
-      btnSubmit.disabled = false;
+    // ---------------------------------------------------------
+    // 🔐 Primeiro acesso: bloqueia o fluxo normal e exige que o
+    // usuário defina uma nova senha antes de prosseguir.
+    // ---------------------------------------------------------
+    if (!senhaRedefinida) {
+      log("processarLogin:primeiroAcesso", { id: usuario.id });
+      usuarioPendenteRedefinicao = usuario;
+      mostrarSucesso("Login validado. Por segurança, defina uma nova senha.");
+      setCarregando(false);
+      abrirModalRedefinicao();
+      return;
     }
-  });
-}
 
-function traduzirErro(msg) {
-  const mapa = {
-    "Invalid login credentials": "E-mail ou senha inválidos.",
-    "User already registered": "Este e-mail já está cadastrado.",
-    "Password should be at least 6 characters": "A senha deve ter pelo menos 6 caracteres.",
-    "Email not confirmed": "Confirme seu e-mail antes de entrar.",
-  };
-  return mapa[msg] || msg;
-}
-
-// -------- Se já estiver logado, vai direto pro gerador --------
-(async () => {
-  const { data: { session } } = await supabaseClient.auth.getSession();
-  if (session) {
-    window.location.href = "gerador.html";
+    mostrarSucesso("Acesso validado! Atualizando informações institucionais...");
+    redirecionar();
+  } catch (erro) {
+    logErro("processarLogin", erro);
+    mostrarErro(traduzirErro(erro));
+    setCarregando(false);
   }
-})();
+}
+
+// =========================================================
+// 9.1 Fluxo de redefinição obrigatória de senha (primeiro acesso)
+// =========================================================
+
+async function processarRedefinicaoSenha(evento) {
+  evento.preventDefault();
+  limparErroRedefinicao();
+
+  if (!usuarioPendenteRedefinicao) {
+    mostrarErroRedefinicao("Sessão expirada. Faça login novamente.");
+    return;
+  }
+
+  const novaSenha = els.novaSenha?.value ?? "";
+  const confirmarSenha = els.confirmarSenha?.value ?? "";
+
+  const erroValidacao = validarNovaSenha(novaSenha, confirmarSenha);
+  if (erroValidacao) {
+    mostrarErroRedefinicao(erroValidacao);
+    return;
+  }
+
+  setCarregandoRedefinicao(true);
+
+  try {
+    log("processarRedefinicaoSenha:inicio", { id: usuarioPendenteRedefinicao.id });
+
+    const { error: erroSenha } = await supabaseClient.auth.updateUser({
+      password: novaSenha,
+    });
+
+    if (erroSenha) throw erroSenha;
+
+    await marcarSenhaRedefinida(usuarioPendenteRedefinicao.id);
+
+    log("processarRedefinicaoSenha:sucesso", { id: usuarioPendenteRedefinicao.id });
+
+    fecharModalRedefinicao();
+    mostrarSucesso("Senha redefinida com sucesso! Redirecionando...");
+    usuarioPendenteRedefinicao = null;
+
+    redirecionar();
+  } catch (erro) {
+    logErro("processarRedefinicaoSenha", erro);
+    mostrarErroRedefinicao(traduzirErro(erro));
+    setCarregandoRedefinicao(false);
+  }
+}
+
+// =========================================================
+// 10. Verificação de sessão existente ao carregar a página
+// Também respeita a exigência de redefinição de senha: se a
+// sessão já existir mas a senha ainda não foi redefinida, o
+// usuário é mantido na tela de login com o modal aberto, em
+// vez de ser redirecionado diretamente ao painel.
+// =========================================================
+
+async function verificarSessaoExistente() {
+  try {
+    const { data: { session }, error } = await supabaseClient.auth.getSession();
+    if (error) {
+      logErro("verificarSessaoExistente", error);
+      return;
+    }
+    if (session) {
+      log("verificarSessaoExistente:sessaoAtiva", { userId: session.user?.id });
+
+      const { ativo, senhaRedefinida } = await validarContaAtiva(session.user.id);
+
+      if (!ativo) {
+        await supabaseClient.auth.signOut();
+        return;
+      }
+
+      if (!senhaRedefinida) {
+        usuarioPendenteRedefinicao = session.user;
+        abrirModalRedefinicao();
+        return;
+      }
+
+      redirecionar(REDIRECT_URL, 0);
+    }
+  } catch (erro) {
+    logErro("verificarSessaoExistente:excecao", erro);
+  }
+}
+
+// =========================================================
+// 11. Inicialização
+// =========================================================
+
+if (els.form) {
+  els.form.addEventListener("submit", processarLogin);
+}
+
+if (els.formRedefinicao) {
+  els.formRedefinicao.addEventListener("submit", processarRedefinicaoSenha);
+}
+
+verificarSessaoExistente();

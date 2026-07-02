@@ -4,7 +4,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login | Assinatura HEMC</title>
+  <title>Login | Assina.ai - HEMC</title>
+  <link rel="icon" type="image/x-icon" href="img/favicon.ico">
 
   <script>
     // Sincronizador Atômico de Tema: impede a cintilação (flash) visual ao carregar a página
@@ -26,28 +27,124 @@
       display: flex;
       flex-direction: column;
     }
-    #campos-cadastro {
-      display: none;
-    }
-    #campos-cadastro.visivel {
-      display: contents !important;
-    }
     .campo-nome { order: 1; }
     .campo-email { order: 2; }
-    .campo-cargo { order: 3; }
+    .campo-senha { order: 3; }
+    .campo-cargo { order: 4; }
     .campo-ramal { order: 5; }
-    .campo-senha { order: 6; }
-    .acoes { order: 7; }
-    .mensagem-erro, .mensagem-sucesso { order: 8; }
+    .acoes { order: 6; margin-top: 24px; }
+    .mensagem-erro, .mensagem-sucesso { order: 7; }
+
+    /* =========================================================
+       🖼️ Logo institucional — canto superior esquerdo
+       ========================================================= */
+    .logo-institucional {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+    }
+    .logo-institucional img {
+      height: 72px;
+      width: auto;
+      display: block;
+    }
+    @media (max-width: 600px) {
+      .logo-institucional {
+        top: 12px;
+        left: 12px;
+      }
+      .logo-institucional img {
+        height: 52px;
+      }
+    }
+
+    /* =========================================================
+       🔐 Modal de Redefinição de Senha (Primeiro Acesso)
+       ========================================================= */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+    }
+    .modal-overlay.visivel {
+      display: flex;
+    }
+    .modal-redefinir-senha {
+      background: #ffffff;
+      color: #1a1a2e;
+      border-radius: 12px;
+      padding: 32px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+    }
+    .modal-redefinir-senha h2 {
+      margin: 0 0 6px 0;
+      font-size: 1.25rem;
+      color: #1a1a2e;
+      font-weight: 700;
+    }
+    .modal-redefinir-senha p.aviso {
+      margin: 0 0 20px 0;
+      font-size: 0.875rem;
+      color: #5a5a6e;
+      line-height: 1.5;
+    }
+    .modal-redefinir-senha form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .modal-redefinir-senha label {
+      font-size: 0.875rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      display: block;
+      color: #1a1a2e;
+    }
+    .modal-redefinir-senha input {
+      width: 100%;
+      box-sizing: border-box;
+      background: #f3f4f8;
+      border: 1px solid #d8dae2;
+      color: #1a1a2e;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 0.9375rem;
+    }
+    .modal-redefinir-senha input::placeholder {
+      color: #9497a8;
+    }
+    .modal-redefinir-senha input:focus {
+      outline: none;
+      border-color: #4f6df5;
+      background: #ffffff;
+    }
+    .modal-redefinir-senha .acoes-modal {
+      margin-top: 8px;
+    }
   </style>
 </head>
 
 <body>
+
+  <!-- 🖼️ Logo Institucional -->
+  <div class="logo-institucional">
+    <img src="img/logo_assina.png" alt="Logo Hospital Estadual Mário Covas">
+  </div>
+
   <div class="login-wrapper">
-    
-    <!-- 🌓 Alternador de Tema Sincronizado (Posicionado na lateral superior direita) -->
+
+    <!-- 🌓 Alternador de Tema Sincronizado -->
     <button type="button" class="login-theme-toggle" id="btn-tema-login" aria-label="Alternar tema claro/escuro">
-      <!-- Ícone de Sol (Visível no tema escuro para mudar para claro) -->
       <svg id="sun-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="5"></circle>
         <line x1="12" y1="1" x2="12" y2="3"></line>
@@ -59,7 +156,6 @@
         <line x1="4.22" y1="19.07" x2="5.64" y2="17.66"></line>
         <line x1="18.36" y1="5.34" x2="19.78" y2="4.22"></line>
       </svg>
-      <!-- Ícone de Lua (Visível no tema claro para mudar para escuro) -->
       <svg id="moon-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
       </svg>
@@ -68,10 +164,15 @@
     <!-- Card de Autenticação -->
     <div class="login-card">
       <h1 id="titulo-form">Entrar</h1>
-      <p class="subtitulo" id="subtitulo-form">Acesse com seu e-mail institucional</p>
+      <p class="subtitulo" id="subtitulo-form">Acesse e valide seus dados institucionais</p>
 
       <form id="form-auth">
-        
+
+        <div class="campo campo-nome">
+          <label for="nome">Nome completo</label>
+          <input id="nome" type="text" required placeholder="Ex: Gabriel Barreto" autocomplete="name">
+        </div>
+
         <div class="campo campo-email">
           <label for="email">E-mail institucional</label>
           <div class="email-field-group">
@@ -85,29 +186,23 @@
           <input id="senha" type="password" required minlength="6" placeholder="••••••••">
         </div>
 
-        <div id="campos-cadastro">
-          
-          <div class="campo campo-nome">
-            <label for="nome-completo">Nome completo</label>
-            <input id="nome-completo" type="text" placeholder="Seu nome completo">
-          </div>
+        <div class="campo campo-cargo">
+          <label for="cargo">Cargo</label>
+          <input id="cargo" type="text" required placeholder="Ex: Analista de TI">
+        </div>
 
-          <div class="campo campo-cargo">
-            <label for="cargo">Cargo</label>
-            <input id="cargo" type="text" placeholder="Ex: Analista de TI">
+        <div class="campo campo-ramal">
+          <label for="telefone">Ramal</label>
+          <div class="ramal-field-group">
+            <span class="ramal-prefix">2829-</span>
+            <input id="telefone" class="ramal-input" type="text" 
+                   inputmode="numeric" 
+                   maxlength="4" 
+                   pattern="\d{4}" 
+                   title="Digite exatamente os 4 dígitos do seu ramal"
+                   required
+                   placeholder="XXXX">
           </div>
-
-          <div class="campo campo-ramal">
-            <label for="telefone">Ramal</label>
-            <div class="ramal-field-group">
-              <span class="ramal-prefix">2829-</span>
-              <input id="telefone" class="ramal-input" type="text" 
-                     inputmode="numeric" 
-                     maxlength="4" 
-                     placeholder="XXXX">
-            </div>
-          </div>
-
         </div>
 
         <div class="acoes">
@@ -117,13 +212,9 @@
         <div id="msg-erro" class="mensagem-erro"></div>
         <div id="msg-sucesso" class="mensagem-sucesso"></div>
       </form>
-
-      <div class="alternar-modo">
-        <a href="#" id="alternar-modo-link">Não tenho conta. Cadastrar</a>
-      </div>
     </div>
 
-    <!-- 🚀 Floating Developer Portfolio Badge (GitHub Link) -->
+    <!-- 🚀 Floating Developer Portfolio Badge -->
     <a href="https://github.com/Barreto0620" target="_blank" rel="noopener noreferrer" class="developer-badge" title="Ver portfólio no GitHub">
       <div class="avatar-icon">
         <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
@@ -135,6 +226,36 @@
         <span class="name-dev">Gabriel Barreto</span>
       </div>
     </a>
+  </div>
+
+  <!-- =========================================================
+       🔐 Modal: Redefinição Obrigatória de Senha (Primeiro Acesso)
+       Exibido automaticamente após login quando o perfil ainda
+       não passou pela troca de senha inicial.
+       ========================================================= -->
+  <div class="modal-overlay" id="modal-redefinir-senha-overlay">
+    <div class="modal-redefinir-senha">
+      <h2>Defina sua nova senha</h2>
+      <p class="aviso">Por segurança, este é seu primeiro acesso. Crie uma nova senha para continuar.</p>
+
+      <form id="form-redefinir-senha">
+        <div class="campo">
+          <label for="nova-senha">Nova senha</label>
+          <input id="nova-senha" type="password" required minlength="6" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+        </div>
+
+        <div class="campo">
+          <label for="confirmar-senha">Confirmar nova senha</label>
+          <input id="confirmar-senha" type="password" required minlength="6" placeholder="Repita a nova senha" autocomplete="new-password">
+        </div>
+
+        <div class="acoes-modal">
+          <button type="submit" id="btn-confirmar-redefinicao" class="btn">Salvar e continuar</button>
+        </div>
+
+        <div id="msg-erro-redefinicao" class="mensagem-erro"></div>
+      </form>
+    </div>
   </div>
 
   <script type="module" src="js/auth.js"></script>
@@ -183,14 +304,14 @@
       // -------------------------------------------------------------
       // 🔒 Máscaras de Entrada de Dados (Sanitização)
       // -------------------------------------------------------------
-      const inputNome = document.getElementById("nome-completo");
+      const inputNome = document.getElementById("nome");
       const inputCargo = document.getElementById("cargo");
       const inputRamal = document.getElementById("telefone");
       const inputEmail = document.getElementById("email");
 
       if (inputNome) {
         inputNome.addEventListener("input", (e) => {
-          e.target.value = e.target.value.replace(/[^A-Za-zÀ-ÿ\s]/g, "");
+          e.target.value = e.target.value.replace(/[^A-Za-zÀ-ÿ\s\-\.\']/g, "");
         });
       }
       if (inputCargo) {
