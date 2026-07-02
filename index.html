@@ -6,29 +6,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login | Assinatura HEMC</title>
 
+  <script>
+    // Sincronizador Atômico de Tema: impede a cintilação (flash) visual ao carregar a página
+    (function () {
+      try {
+        var temaSalvo = localStorage.getItem('hemc-tema');
+        if (temaSalvo === 'light' || temaSalvo === 'dark') {
+          document.documentElement.setAttribute('data-theme', temaSalvo);
+        }
+      } catch (e) {}
+    })();
+  </script>
+
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/login.css">
 
   <style>
-    /* =========================================================
-       Sincronização Perfeita de Layout (Flexbox + display: contents)
-       ========================================================= */
     #form-auth {
       display: flex;
       flex-direction: column;
     }
-
-    /* 🛡️ Por padrão (Tela de Login), mantém o container de cadastro totalmente oculto */
     #campos-cadastro {
       display: none;
     }
-
-    /* 🛡️ Quando o seu auth.js injeta a classe "visivel", desmembramos o container para aplicar a ordenação */
     #campos-cadastro.visivel {
       display: contents !important;
     }
-
-    /* Ordenação cirúrgica dos campos para a tela de Cadastro */
     .campo-nome { order: 1; }
     .campo-email { order: 2; }
     .campo-cargo { order: 3; }
@@ -36,74 +39,33 @@
     .campo-senha { order: 6; }
     .acoes { order: 7; }
     .mensagem-erro, .mensagem-sucesso { order: 8; }
-
-    /* Customização do Campo de E-mail com Sufixo Fixo Embutido */
-    .email-field-group {
-      display: flex;
-      align-items: center;
-      border: 1px solid #ced4da;
-      border-radius: 4px;
-      background: #fff;
-      padding-right: 12px;
-      box-sizing: border-box;
-      transition: border-color 0.15s ease-in-out;
-    }
-    .email-field-group:focus-within {
-      border-color: #86b7fe;
-      outline: 0;
-    }
-    .email-suffix {
-      font-weight: 600;
-      color: #6c757d;
-      margin-left: 4px;
-      user-select: none;
-      font-size: 14px;
-    }
-    .email-input {
-      flex: 1;
-      border: none !important;
-      background: transparent !important;
-      padding: 10px 0 10px 12px !important;
-      outline: none !important;
-      margin: 0 !important;
-      box-shadow: none !important;
-    }
-
-    /* Customização do Campo de Ramal com Prefixo Embutido */
-    .ramal-field-group {
-      display: flex;
-      align-items: center;
-      border: 1px solid #ced4da;
-      border-radius: 4px;
-      background: #fff;
-      padding-left: 12px;
-      box-sizing: border-box;
-      transition: border-color 0.15s ease-in-out;
-    }
-    .ramal-field-group:focus-within {
-      border-color: #86b7fe;
-      outline: 0;
-    }
-    .ramal-prefix {
-      font-weight: bold;
-      color: #495057;
-      margin-right: 2px;
-      user-select: none;
-    }
-    .ramal-input {
-      flex: 1;
-      border: none !important;
-      background: transparent !important;
-      padding: 10px 10px 10px 0 !important;
-      outline: none !important;
-      margin: 0 !important;
-      box-shadow: none !important;
-    }
   </style>
 </head>
 
 <body>
   <div class="login-wrapper">
+    
+    <!-- 🌓 Alternador de Tema Sincronizado (Posicionado na lateral superior direita) -->
+    <button type="button" class="login-theme-toggle" id="btn-tema-login" aria-label="Alternar tema claro/escuro">
+      <!-- Ícone de Sol (Visível no tema escuro para mudar para claro) -->
+      <svg id="sun-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.07" x2="5.64" y2="17.66"></line>
+        <line x1="18.36" y1="5.34" x2="19.78" y2="4.22"></line>
+      </svg>
+      <!-- Ícone de Lua (Visível no tema claro para mudar para escuro) -->
+      <svg id="moon-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+    </button>
+
+    <!-- Card de Autenticação -->
     <div class="login-card">
       <h1 id="titulo-form">Entrar</h1>
       <p class="subtitulo" id="subtitulo-form">Acesse com seu e-mail institucional</p>
@@ -160,12 +122,67 @@
         <a href="#" id="alternar-modo-link">Não tenho conta. Cadastrar</a>
       </div>
     </div>
+
+    <!-- 🚀 Floating Developer Portfolio Badge (GitHub Link) -->
+    <a href="https://github.com/Barreto0620" target="_blank" rel="noopener noreferrer" class="developer-badge" title="Ver portfólio no GitHub">
+      <div class="avatar-icon">
+        <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+      </div>
+      <div class="text-container">
+        <span class="label-dev">Desenvolvido por</span>
+        <span class="name-dev">Gabriel Barreto</span>
+      </div>
+    </a>
   </div>
 
   <script type="module" src="js/auth.js"></script>
 
+  <!-- Script Interno para controle de Tema e máscaras de validação -->
   <script>
     document.addEventListener("DOMContentLoaded", () => {
+      // -------------------------------------------------------------
+      // 🌓 Lógica Dinâmica do Alternador de Temas (Sincronizado)
+      // -------------------------------------------------------------
+      const root = document.documentElement;
+      const btnTema = document.getElementById('btn-tema-login');
+      const sunIcon = document.getElementById('sun-icon');
+      const moonIcon = document.getElementById('moon-icon');
+
+      function obterTemaAtual() {
+        return root.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+      }
+
+      function atualizarIconesVisuais(tema) {
+        if (tema === 'light') {
+          sunIcon.style.display = 'none';
+          moonIcon.style.display = 'block';
+        } else {
+          sunIcon.style.display = 'block';
+          moonIcon.style.display = 'none';
+        }
+      }
+
+      btnTema.addEventListener('click', () => {
+        const novoTema = obterTemaAtual() === 'light' ? 'dark' : 'light';
+        
+        if (novoTema === 'dark') {
+          root.removeAttribute('data-theme');
+        } else {
+          root.setAttribute('data-theme', 'light');
+        }
+        
+        try { localStorage.setItem('hemc-tema', novoTema); } catch(e) {}
+        atualizarIconesVisuais(novoTema);
+      });
+
+      // Inicializa exibição correta dos ícones baseados no antiflash script
+      atualizarIconesVisuais(obterTemaAtual());
+
+      // -------------------------------------------------------------
+      // 🔒 Máscaras de Entrada de Dados (Sanitização)
+      // -------------------------------------------------------------
       const inputNome = document.getElementById("nome-completo");
       const inputCargo = document.getElementById("cargo");
       const inputRamal = document.getElementById("telefone");
@@ -176,20 +193,16 @@
           e.target.value = e.target.value.replace(/[^A-Za-zÀ-ÿ\s]/g, "");
         });
       }
-
       if (inputCargo) {
         inputCargo.addEventListener("input", (e) => {
           e.target.value = e.target.value.replace(/[^A-Za-zÀ-ÿ\s\-\.\,]/g, "");
         });
       }
-
       if (inputRamal) {
         inputRamal.addEventListener("input", (e) => {
           e.target.value = e.target.value.replace(/[^0-9]/g, "");
         });
       }
-
-      // Higieniza o e-mail: força minúsculas e impede o caractere '@' ou espaços
       if (inputEmail) {
         inputEmail.addEventListener("input", (e) => {
           e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9\.\-\_]/g, "");
