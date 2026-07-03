@@ -57,6 +57,7 @@ const MAPA_CAMPOS = {
     sessaoInfo.profile?.nome_completo || sessaoInfo.user.email;
 
   configurarTabs();
+  injetarEstilosTimelineLogs();
   configurarToolbarColaboradores();
   configurarToolbarLogs();
   configurarPaginacao();
@@ -331,56 +332,189 @@ function renderizarLogs() {
   atualizarPaginacaoUI('logs', lista.length, estadoLogs);
 }
 
-// Gera um resumo curto e legível para exibir direto na timeline, sem precisar
-// abrir o modal de detalhes.
+// Gera o resumo visual do evento (chips de informação + bloco de alterações),
+// exibido direto na timeline, sem precisar abrir o modal de detalhes.
 //
 // Para o evento de "login": sempre mostra Nome / Cargo / Ramal com que o
-// colaborador efetivamente entrou (independente de ter mudado ou não em
-// relação ao acesso anterior) — é o que aparecia "faltando" antes, pois só
-// os campos alterados eram exibidos na linha resumida.
-//
-// Para as demais ações (ex.: atualização de perfil pelo admin, ativação/
-// desativação): mantém o formato de diff ("De → Para").
+// colaborador efetivamente entrou, em formato de chips.
+// Quando há alterações (login com dado diferente do último acesso, edição
+// de perfil pelo admin, ativação/desativação): mostra um bloco destacado
+// "Alterações", com "De" riscado e "Para" em destaque.
 function resumoDetalhesLog(log) {
   const detalhes = log?.detalhes;
   if (!detalhes || typeof detalhes !== 'object') return '';
 
+  const blocos = [];
+
   if (log.acao === 'login') {
-    const partes = [];
-    if (detalhes.nome_completo) {
-      partes.push(`<strong>Nome:</strong> ${escapeHtml(detalhes.nome_completo)}`);
-    }
-    if (detalhes.cargo) {
-      partes.push(`<strong>Cargo:</strong> ${escapeHtml(detalhes.cargo)}`);
-    }
-    if (detalhes.ramal) {
-      partes.push(`<strong>Ramal:</strong> ${escapeHtml(detalhes.ramal)}`);
-    }
-
-    const diff = resumoCamposAlterados(detalhes.campos_alterados);
-    if (diff) {
-      partes.push(`<span class="admin-timeline-alterado">Alterado desde o último acesso — ${diff}</span>`);
-    }
-
-    return partes.join(' &nbsp;·&nbsp; ');
+    const pares = [];
+    if (detalhes.nome_completo) pares.push({ rotulo: 'Nome', valor: detalhes.nome_completo });
+    if (detalhes.cargo) pares.push({ rotulo: 'Cargo', valor: detalhes.cargo });
+    if (detalhes.ramal) pares.push({ rotulo: 'Ramal', valor: detalhes.ramal, mono: true });
+    if (pares.length) blocos.push(construirChipsInfo(pares));
   }
 
-  return resumoCamposAlterados(detalhes.campos_alterados);
+  const blocoDiff = construirBlocoDiff(detalhes.campos_alterados);
+  if (blocoDiff) blocos.push(blocoDiff);
+
+  if (!blocos.length && detalhes.observacao) {
+    blocos.push(`<span class="admin-log-observacao">${escapeHtml(detalhes.observacao)}</span>`);
+  }
+
+  return blocos.join('');
 }
 
-// Formata um objeto de diff { campo: { de, para } } em texto "De → Para",
-// usado tanto no resumo padrão quanto dentro do resumo especial de login.
-function resumoCamposAlterados(alteracoes) {
-  if (!alteracoes || typeof alteracoes !== 'object') return '';
+// Monta um conjunto de "chips" (rótulo + valor), lado a lado, com quebra de
+// linha automática — usado para exibir Nome/Cargo/Ramal do login.
+function construirChipsInfo(pares) {
+  const chips = pares.map(({ rotulo, valor, mono }) => `
+    <span class="admin-log-chip">
+      <span class="admin-log-chip-rotulo">${escapeHtml(rotulo)}</span>
+      <span class="admin-log-chip-valor${mono ? ' admin-log-chip-mono' : ''}">${escapeHtml(String(valor))}</span>
+    </span>`).join('');
+  return `<div class="admin-log-chips">${chips}</div>`;
+}
 
-  const partes = Object.entries(alteracoes).map(([campo, valores]) => {
+// Monta o bloco destacado de alterações a partir de um diff
+// { campo: { de, para } }, com "De" riscado e "Para" em destaque.
+function construirBlocoDiff(alteracoes) {
+  if (!alteracoes || typeof alteracoes !== 'object' || !Object.keys(alteracoes).length) return '';
+
+  const linhas = Object.entries(alteracoes).map(([campo, valores]) => {
     const rotulo = MAPA_CAMPOS[campo] || campo;
     const de = valores?.de ?? '—';
     const para = valores?.para ?? '—';
-    return `<strong>${escapeHtml(rotulo)}:</strong> ${escapeHtml(String(de))} → ${escapeHtml(String(para))}`;
-  });
+    return `
+      <div class="admin-log-diff-linha">
+        <span class="admin-log-diff-rotulo">${escapeHtml(rotulo)}</span>
+        <span class="admin-log-diff-de">${escapeHtml(String(de))}</span>
+        <span class="admin-log-diff-seta">→</span>
+        <span class="admin-log-diff-para">${escapeHtml(String(para))}</span>
+      </div>`;
+  }).join('');
 
-  return partes.length ? partes.join(' &nbsp;·&nbsp; ') : '';
+  return `
+    <div class="admin-log-diff-bloco">
+      <span class="admin-log-diff-titulo">Alterações</span>
+      ${linhas}
+    </div>`;
+}
+
+// =========================================================
+// Estilos da timeline de logs (chips + bloco de diff)
+// Injetados dinamicamente para não depender de editar admin.css —
+// respeitam o tema claro/escuro já usado no restante do painel.
+// =========================================================
+function injetarEstilosTimelineLogs() {
+  if (document.getElementById('admin-log-estilos-dinamicos')) return;
+
+  const estilo = document.createElement('style');
+  estilo.id = 'admin-log-estilos-dinamicos';
+  estilo.textContent = `
+    .admin-timeline-linha3 {
+      margin-top: 8px;
+    }
+
+    .admin-log-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .admin-log-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(99, 140, 255, 0.10);
+      border: 1px solid rgba(99, 140, 255, 0.22);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      line-height: 1.3;
+      color: inherit;
+    }
+
+    .admin-log-chip-rotulo {
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      opacity: 0.65;
+    }
+
+    .admin-log-chip-valor {
+      font-weight: 500;
+    }
+
+    .admin-log-chip-mono {
+      font-family: 'SFMono-Regular', Consolas, Menlo, monospace;
+      letter-spacing: 0.03em;
+    }
+
+    .admin-log-diff-bloco {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-left: 3px solid #d69a1f;
+      background: rgba(214, 154, 31, 0.10);
+      border-radius: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .admin-log-diff-titulo {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 700;
+      opacity: 0.7;
+      margin-bottom: 2px;
+    }
+
+    .admin-log-diff-linha {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12.5px;
+      flex-wrap: wrap;
+    }
+
+    .admin-log-diff-rotulo {
+      font-weight: 600;
+      min-width: 70px;
+      opacity: 0.8;
+    }
+
+    .admin-log-diff-de {
+      text-decoration: line-through;
+      opacity: 0.55;
+    }
+
+    .admin-log-diff-seta {
+      opacity: 0.5;
+    }
+
+    .admin-log-diff-para {
+      font-weight: 600;
+      color: #3fae76;
+    }
+
+    .admin-log-observacao {
+      font-size: 12px;
+      opacity: 0.6;
+      font-style: italic;
+    }
+
+    [data-theme="light"] .admin-log-chip {
+      background: rgba(39, 68, 127, 0.06);
+      border-color: rgba(39, 68, 127, 0.16);
+    }
+
+    [data-theme="light"] .admin-log-diff-bloco {
+      background: rgba(214, 154, 31, 0.14);
+    }
+  `;
+  document.head.appendChild(estilo);
 }
 
 function abrirDetalhesLog(id) {
