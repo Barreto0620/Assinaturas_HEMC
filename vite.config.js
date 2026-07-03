@@ -6,8 +6,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
-        gerador: resolve(__dirname, 'gerador.html'), 
-        admin: resolve(__dirname, 'admin.html'),     
+        gerador: resolve(__dirname, 'gerador.html'),
+        admin: resolve(__dirname, 'admin.html'),
       },
     },
   },
