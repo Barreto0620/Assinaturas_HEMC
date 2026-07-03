@@ -17,11 +17,34 @@ const btnBaixar = document.getElementById("btn-baixar");
 const areaAssinatura = document.getElementById("assinatura");
 
 // =========================================================
+// 0. MODO ADMIN — gerar assinatura em nome de outro colaborador
+// Ativado via query string ?adminGerarPara=<id_do_colaborador>
+// vinda do painel admin. Nesse modo, os dados carregados são
+// os do colaborador-alvo, não os do admin logado.
+// =========================================================
+const parametrosUrl = new URLSearchParams(window.location.search);
+const idColaboradorAlvo = parametrosUrl.get("adminGerarPara");
+let modoAdminAtivo = false;
+let colaboradorAlvoCache = null;
+
+function exibirFaixaModoAdmin(nomeColaborador) {
+  const faixa = document.createElement("div");
+  faixa.id = "faixa-modo-admin";
+  faixa.style.cssText = `
+    background: linear-gradient(135deg, #d69a1f, #b5790f);
+    color: #fff; text-align: center; padding: 10px 16px;
+    font-size: 13px; font-weight: 600; position: sticky; top: 0; z-index: 500;
+  `;
+  faixa.innerHTML = `⚠️ Modo administrador: gerando assinatura em nome de <strong>${nomeColaborador}</strong>. &nbsp;
+    <a href="admin.html" style="color:#fff; text-decoration: underline;">Voltar ao painel</a>`;
+  document.body.prepend(faixa);
+}
+
+// =========================================================
 // 1. VERIFICA SESSÃO E CARREGA DADOS DO PERFIL
 // =========================================================
 async function inicializarGerador() {
   try {
-    // Busca a sessão ativa do usuário
     const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
 
     if (sessionError || !session) {
@@ -31,24 +54,64 @@ async function inicializarGerador() {
 
     const user = session.user;
 
-    // Busca os dados complementares do perfil na tabela pública
-    const { data: profile, error: profileError } = await supabaseClient
-      .from("profiles")
-      .select("nome_completo, cargo, telefone")
-      .eq("id", user.id)
-      .single();
+    // ---------------------------------------------------------
+    // Modo admin: se veio com ?adminGerarPara=ID, confirma que
+    // quem está logado é admin e troca o alvo dos dados exibidos.
+    // ---------------------------------------------------------
+    if (idColaboradorAlvo) {
+      const { data: perfilLogado } = await supabaseClient
+        .from("profiles")
+        .select("is_admin")
+        .eq("id", user.id)
+        .single();
 
-    if (profileError) {
-      console.warn("Perfil não encontrado na tabela pública, usando metadados adicionais.");
+      if (perfilLogado?.is_admin) {
+        const { data: alvo, error: erroAlvo } = await supabaseClient
+          .from("profiles")
+          .select("id, nome_completo, cargo, telefone, email")
+          .eq("id", idColaboradorAlvo)
+          .single();
+
+        if (!erroAlvo && alvo) {
+          modoAdminAtivo = true;
+          colaboradorAlvoCache = alvo;
+        }
+      }
     }
 
-    // Recupera os valores priorizando a tabela ou fallbacks dos metadados da autenticação
-    const nomeCompleto = profile?.nome_completo || user.user_metadata?.nome_completo || "Usuário";
-    const cargo = profile?.cargo || user.user_metadata?.cargo || "Colaborador";
-    const telefone = profile?.telefone || user.user_metadata?.telefone || "(11) 2829-XXXX";
-    const email = user.email;
+    let nomeCompleto, cargo, telefone, email;
 
-    // Alimenta a Interface e os Inputs fixos
+    if (modoAdminAtivo && colaboradorAlvoCache) {
+      nomeCompleto = colaboradorAlvoCache.nome_completo || "Colaborador";
+      cargo = colaboradorAlvoCache.cargo || "Colaborador";
+      telefone = colaboradorAlvoCache.telefone || "(11) 2829-XXXX";
+      email = colaboradorAlvoCache.email || "";
+
+      exibirFaixaModoAdmin(nomeCompleto);
+    } else {
+      // Busca os dados complementares do perfil na tabela pública
+      const { data: profile, error: profileError } = await supabaseClient
+        .from("profiles")
+        .select("nome_completo, cargo, telefone, is_admin")
+        .eq("id", user.id)
+        .single();
+
+      if (profileError) {
+        console.warn("Perfil não encontrado na tabela pública, usando metadados adicionais.");
+      }
+
+      nomeCompleto = profile?.nome_completo || user.user_metadata?.nome_completo || "Usuário";
+      cargo = profile?.cargo || user.user_metadata?.cargo || "Colaborador";
+      telefone = profile?.telefone || user.user_metadata?.telefone || "(11) 2829-XXXX";
+      email = user.email;
+
+      // Exibe o botão de acesso ao painel administrativo somente para admins
+      if (profile?.is_admin) {
+        const btnPainelAdmin = document.getElementById("btn-painel-admin");
+        if (btnPainelAdmin) btnPainelAdmin.style.display = "inline-flex";
+      }
+    }
+
     if (nomeTopo) nomeTopo.textContent = nomeCompleto;
     if (cargoTopo) cargoTopo.textContent = cargo;
 
@@ -62,7 +125,6 @@ async function inicializarGerador() {
   }
 }
 
-// Executa a carga inicial da página
 inicializarGerador();
 
 // =========================================================
@@ -78,7 +140,7 @@ if (btnLogout) {
 // =========================================================
 // 3. GERADOR DA ESTRUTURA VISUAL DA ASSINATURA
 // =========================================================
-btnGerar.addEventListener("click", () => {
+btnGerar.addEventListener("click", async () => {
   const nome = inputNome.value;
   const cargo = inputCargo.value;
   const hospital = inputHospital.value;
@@ -86,12 +148,6 @@ btnGerar.addEventListener("click", () => {
   const telefone = inputTelefone.value;
   const endereco = inputEndereco.value;
 
-  // Montagem limpa utilizando Template Literals (Crases evitam erros com aspas em atributos alt).
-  // Cor de texto forçada em preto absoluto (#000000) com !important em cada elemento,
-  // evitando que estilos herdados do container de preview (ex.: cor cinza aplicada
-  // globalmente) deixem o texto acinzentado na hora da exportação via html2canvas.
-  // "-webkit-font-smoothing" e "text-rendering" ajudam a manter a nitidez das fontes
-  // quando a imagem final é ampliada em alta resolução.
   const assinaturaHTML = `
     <div id="assinatura-content" style="width: 680px; font-family: Arial, sans-serif; font-size: 11px; color: #000000 !important; padding-bottom: 0; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;">
       <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
@@ -111,7 +167,8 @@ btnGerar.addEventListener("click", () => {
       </table>
       <div style="height:3px; background:black; margin-top:6px; width: 680px;"></div>
       <div style="height:3px; background:black; margin-top:2px; width: 680px;"></div>
-      <div style="height:3px; background:black; margin-top:2px; width: 680px;"></div> <div style="height:3px; background:black; margin-top:2px; width: 680px;"></div>
+      <div style="height:3px; background:black; margin-top:2px; width: 680px;"></div>
+      <div style="height:3px; background:black; margin-top:2px; width: 680px;"></div>
 
       <p style="margin: 10px 0 0 0; width: 680px; font-size: 8px; line-height: 1.4; color: #6b6b6b !important; text-align: justify; font-family: Arial, sans-serif;">
         As informações contidas e as anexadas a esta comunicação podem ser confidenciais, legalmente privilegiadas, ou ter de outra forma protegida a sua divulgação, sendo exclusivamente para o uso do(s) seu(s) destinatário(s). Se você NÃO for o destinatário previsto desta comunicação, queira, por gentileza, excluir e destruir todas as cópias em seu poder. Notifique o remetente que você recebeu esta comunicação por engano e esteja ciente de que a leitura ou divulgação, bem como a adoção de qualquer ação baseada nesta comunicação, está expressamente proibida. Qualquer conteúdo que não esteja relacionado ao Hospital Estadual Mário Covas de Santo André reflete apenas as opiniões do remetente, não as da instituição. Obrigado pela leitura.
@@ -119,36 +176,55 @@ btnGerar.addEventListener("click", () => {
     </div>`;
 
   areaAssinatura.innerHTML = assinaturaHTML;
-
-  // Libera o botão de download após gerar com sucesso
   btnBaixar.disabled = false;
+
+  // ---------------------------------------------------------
+  // Log de geração de assinatura (tabela logs_assinatura, já
+  // existente no schema). Se estiver em modo admin, registra
+  // também um activity_log detalhado com quem gerou para quem.
+  // ---------------------------------------------------------
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) return;
+
+    const usuarioAlvoId = modoAdminAtivo ? idColaboradorAlvo : session.user.id;
+
+    await supabaseClient.from("logs_assinatura").insert({
+      user_id: usuarioAlvoId,
+      acao: "gerar_assinatura",
+    });
+
+    if (modoAdminAtivo) {
+      await supabaseClient.from("activity_logs").insert({
+        usuario_id: usuarioAlvoId,
+        nome_no_momento: nome,
+        acao: "assinatura_gerada",
+        detalhes: { gerado_por_admin: true },
+        executado_por: session.user.id,
+      });
+    }
+  } catch (erroLog) {
+    console.error("Erro ao registrar log de assinatura:", erroLog);
+  }
 });
 
 // =========================================================
 // 4. DOWNLOAD EM FORMATO PORTÁTIL PNG (HTML2CANVAS) — QUALIDADE PROFISSIONAL
 // =========================================================
 btnBaixar.addEventListener("click", () => {
-  // Alvo alterado para capturar apenas a assinatura interna, ignorando a borda pontilhada de preview
   const conteudoReal = document.getElementById("assinatura-content") || areaAssinatura;
 
-  // Fator de escala elevado para 3x: aumenta drasticamente a resolução final
-  // (equivalente a renderizar em uma tela de altíssimo DPI), eliminando
-  // serrilhados em textos e bordas mesmo quando a imagem é ampliada depois.
   const ESCALA_EXPORTACAO = 3;
 
-  // Configurações avançadas para garantir máxima nitidez da imagem gerada
   const configCanvas = {
-    scale: ESCALA_EXPORTACAO,     // Resolução interna 3x maior (antes: 2x)
-    useCORS: true,                // Permite carregamento seguro de imagens locais/externas
-    allowTaint: false,            // Evita "sujar" o canvas, garantindo que toDataURL funcione
-    backgroundColor: "#ffffff",   // Fundo branco sólido evita transparências indesejadas no PNG final
-    imageTimeout: 15000,          // Tempo extra para garantir carregamento completo de imagens (ex.: logo)
-    logging: false,               // Desativa logs de debug do html2canvas em produção
-    letterRendering: true,        // Renderiza cada letra individualmente, melhorando nitidez tipográfica
-    removeContainer: true,        // Limpa elementos temporários criados durante a captura
-
-    // Ajusta a resolução do canvas clonado para respeitar o dispositivo de exportação,
-    // evitando que o navegador aplique downscaling automático na hora do render.
+    scale: ESCALA_EXPORTACAO,
+    useCORS: true,
+    allowTaint: false,
+    backgroundColor: "#ffffff",
+    imageTimeout: 15000,
+    logging: false,
+    letterRendering: true,
+    removeContainer: true,
     onclone: (documentoClonado) => {
       const alvoClonado = documentoClonado.getElementById("assinatura-content");
       if (alvoClonado) {
@@ -159,17 +235,12 @@ btnBaixar.addEventListener("click", () => {
   };
 
   html2canvas(conteudoReal, configCanvas).then((canvas) => {
-    // Correção de nitidez pós-render: reforça suavização de imagem no contexto 2D,
-    // reduzindo qualquer serrilhado residual de elementos rasterizados (ex.: logo).
     const contexto = canvas.getContext("2d");
     if (contexto) {
       contexto.imageSmoothingEnabled = true;
       contexto.imageSmoothingQuality = "high";
     }
 
-    // Exportação em PNG com qualidade máxima (1.0 = sem perdas/compressão mínima).
-    // PNG é sempre lossless, mas o parâmetro de qualidade é mantido explícito
-    // para compatibilidade e clareza de intenção no código.
     const imagemBase64 = canvas.toDataURL("image/png", 1.0);
 
     const linkPng = document.createElement("a");

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel Administrativo | Assina.ai HEMC</title>
+  <link rel="icon" type="image/x-icon" href="img/favicon.ico">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('hemc-tema');
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+  <div class="admin-shell">
+
+    <!-- ===== Barra superior ===== -->
+    <div class="admin-topo">
+      <div class="admin-marca">
+        <span class="admin-logo-dot"></span>
+        <div>
+          <div class="admin-titulo">HEMC · Painel Administrativo</div>
+          <div class="admin-subtitulo">Assina.ai — Gestão de Colaboradores</div>
+        </div>
+      </div>
+      <div class="admin-acoes-topo">
+        <span class="admin-usuario-logado">Admin: <strong id="admin-nome-topo">-</strong></span>
+        <button type="button" class="theme-toggle" id="btn-tema">
+          <span class="theme-toggle-track"><span class="theme-toggle-thumb"></span></span>
+          <span id="theme-toggle-label">Escuro</span>
+        </button>
+        <a href="gerador.html" class="btn btn-secundario">Ir ao Gerador</a>
+        <button id="btn-logout" class="btn btn-secundario">Sair</button>
+      </div>
+    </div>
+
+    <!-- ===== Cards de resumo ===== -->
+    <div class="admin-cards">
+      <div class="admin-card">
+        <span class="admin-card-label">Total de Colaboradores</span>
+        <span class="admin-card-valor" id="card-total">-</span>
+      </div>
+      <div class="admin-card admin-card-ativo">
+        <span class="admin-card-label">Ativos</span>
+        <span class="admin-card-valor" id="card-ativos">-</span>
+      </div>
+      <div class="admin-card admin-card-inativo">
+        <span class="admin-card-label">Inativos</span>
+        <span class="admin-card-valor" id="card-inativos">-</span>
+      </div>
+      <div class="admin-card">
+        <span class="admin-card-label">Ações nas últimas 24h</span>
+        <span class="admin-card-valor" id="card-atividade-24h">-</span>
+      </div>
+    </div>
+
+    <!-- ===== Abas ===== -->
+    <div class="admin-tabs">
+      <button class="admin-tab ativo" data-tab="tab-colaboradores">Colaboradores</button>
+      <button class="admin-tab" data-tab="tab-logs">Logs de Atividade</button>
+    </div>
+
+    <!-- ===== Aba: Colaboradores ===== -->
+    <div class="admin-tab-content ativo" id="tab-colaboradores">
+      <div class="admin-filtros">
+        <input type="text" id="filtro-nome" placeholder="Buscar por nome ou e-mail...">
+        <select id="filtro-status">
+          <option value="todos">Todos os status</option>
+          <option value="ativo">Somente ativos</option>
+          <option value="inativo">Somente inativos</option>
+        </select>
+      </div>
+
+      <div class="admin-tabela-wrap">
+        <table class="admin-tabela" id="tabela-colaboradores">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>E-mail</th>
+              <th>Cargo</th>
+              <th>Status</th>
+              <th>Primeiro Acesso</th>
+              <th>Último Login</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="corpo-tabela-colaboradores">
+            <tr><td colspan="7" class="admin-tabela-vazia">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== Aba: Logs ===== -->
+    <div class="admin-tab-content" id="tab-logs">
+      <div class="admin-filtros">
+        <input type="text" id="filtro-log-nome" placeholder="Buscar por colaborador...">
+        <select id="filtro-log-acao">
+          <option value="todas">Todas as ações</option>
+          <option value="login">Login</option>
+          <option value="cadastro">Cadastro</option>
+          <option value="atualizacao_perfil">Atualização de perfil</option>
+          <option value="reset_senha">Reset de senha</option>
+          <option value="assinatura_gerada">Assinatura gerada</option>
+          <option value="ativado">Ativação</option>
+          <option value="desativado">Desativação</option>
+          <option value="primeiro_acesso_concluido">1º acesso concluído</option>
+        </select>
+        <input type="date" id="filtro-log-data-inicio">
+        <input type="date" id="filtro-log-data-fim">
+        <button id="btn-exportar-csv" class="btn">Exportar CSV</button>
+      </div>
+
+      <div class="admin-tabela-wrap">
+        <table class="admin-tabela" id="tabela-logs">
+          <thead>
+            <tr>
+              <th>Data/Hora</th>
+              <th>Colaborador</th>
+              <th>Ação</th>
+              <th>Detalhes</th>
+              <th>Executado por</th>
+            </tr>
+          </thead>
+          <tbody id="corpo-tabela-logs">
+            <tr><td colspan="5" class="admin-tabela-vazia">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ===== Modal: Editar Colaborador ===== -->
+  <div class="admin-overlay" id="modal-editar">
+    <div class="admin-modal">
+      <div class="admin-modal-header">
+        <h3>Editar Colaborador</h3>
+        <button class="admin-modal-fechar" data-fechar>&times;</button>
+      </div>
+      <form id="form-editar-colaborador">
+        <input type="hidden" id="edit-id">
+        <div class="campo">
+          <label>Nome completo</label>
+          <input type="text" id="edit-nome" required>
+        </div>
+        <div class="campo">
+          <label>Cargo</label>
+          <input type="text" id="edit-cargo" required>
+        </div>
+        <div class="campo">
+          <label>Ramal (4 dígitos)</label>
+          <input type="text" id="edit-ramal" maxlength="4" pattern="\d{4}">
+        </div>
+        <div class="admin-modal-acoes">
+          <button type="submit" class="btn">Salvar alterações</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Modal: Confirmar ação (desativar/reset) ===== -->
+  <div class="admin-overlay" id="modal-confirmar">
+    <div class="admin-modal admin-modal-pequeno">
+      <div class="admin-modal-header">
+        <h3 id="confirmar-titulo">Confirmar ação</h3>
+        <button class="admin-modal-fechar" data-fechar>&times;</button>
+      </div>
+      <p id="confirmar-texto" class="admin-modal-texto"></p>
+      <div class="admin-modal-acoes">
+        <button id="btn-confirmar-acao" class="btn">Confirmar</button>
+        <button class="btn btn-secundario" data-fechar>Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal: Senha temporária gerada ===== -->
+  <div class="admin-overlay" id="modal-senha-gerada">
+    <div class="admin-modal admin-modal-pequeno">
+      <div class="admin-modal-header">
+        <h3>Senha redefinida</h3>
+        <button class="admin-modal-fechar" data-fechar>&times;</button>
+      </div>
+      <p class="admin-modal-texto">Informe esta senha temporária ao colaborador. Ele deverá trocá-la no próximo acesso.</p>
+      <div class="admin-senha-gerada" id="texto-senha-gerada">-</div>
+      <div class="admin-modal-acoes">
+        <button class="btn" data-fechar>Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>
