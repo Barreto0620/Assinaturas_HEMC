@@ -4,7 +4,8 @@ import { supabaseClient } from './supabaseClient.js';
 // Módulo de Autenticação Institucional — HEMC/FUABC
 // Responsável por: login, validação de conta ativa,
 // sincronização de perfil, redefinição obrigatória de senha
-// no primeiro acesso e tratamento de sessão.
+// no primeiro acesso, tratamento de sessão e registro de
+// auditoria (activity_logs).
 // =========================================================
 
 const DOMINIO_INSTITUCIONAL = "@hemc.fuabc.org.br";
@@ -97,6 +98,38 @@ function logErro(etapa, erro) {
 }
 
 // =========================================================
+// 2.1 Auditoria — registro de atividades na tabela activity_logs
+// Nunca deve travar o fluxo principal do usuário: falhas aqui
+// são apenas logadas no console, nunca lançadas adiante.
+// =========================================================
+
+async function registrarAtividade(usuarioId, nomeCompleto, acao, detalhes = {}) {
+  try {
+    const { error } = await supabaseClient.from("activity_logs").insert({
+      usuario_id: usuarioId,
+      nome_no_momento: nomeCompleto,
+      acao,
+      detalhes,
+    });
+    if (error) throw error;
+  } catch (erro) {
+    logErro("registrarAtividade", erro);
+  }
+}
+
+async function atualizarUltimoLogin(usuarioId) {
+  try {
+    const { error } = await supabaseClient
+      .from("profiles")
+      .update({ ultimo_login: new Date().toISOString() })
+      .eq("id", usuarioId);
+    if (error) throw error;
+  } catch (erro) {
+    logErro("atualizarUltimoLogin", erro);
+  }
+}
+
+// =========================================================
 // 3. Coleta e validação dos dados do formulário
 // =========================================================
 
@@ -179,9 +212,6 @@ async function validarContaAtiva(usuarioId) {
     .maybeSingle();
 
   if (error) {
-    // Se alguma coluna não existir ou houver falha de leitura,
-    // não bloqueamos o login — apenas registramos o aviso e
-    // assumimos os valores mais permissivos (não quebra o fluxo).
     logErro("validarContaAtiva:leitura", error);
     return { ativo: true, senhaRedefinida: true, perfil: null };
   }
@@ -190,8 +220,6 @@ async function validarContaAtiva(usuarioId) {
     return { ativo: false, senhaRedefinida: true, perfil };
   }
 
-  // Se a coluna "senha_redefinida" não existir na linha (undefined),
-  // tratamos como já redefinida para não travar contas antigas.
   const senhaRedefinida = perfil?.senha_redefinida === undefined
     ? true
     : perfil.senha_redefinida === true;
@@ -201,21 +229,13 @@ async function validarContaAtiva(usuarioId) {
 
 // =========================================================
 // 6. Sincronização do perfil (tabela "profiles")
-// Único ponto de persistência de nome/cargo/telefone — não usamos
-// mais auth.updateUser() para evitar duplicidade de fontes.
-//
-// IMPORTANTE: os campos abaixo devem existir na tabela "profiles":
-//   id (uuid, PK, = auth.users.id)
-//   nome_completo (text)
-//   cargo (text)
-//   telefone (text)
-//   senha_redefinida (boolean, default false)  <-- necessário para o
-//     fluxo de redefinição obrigatória de senha no primeiro acesso.
-// Caso queira manter um registro de última atualização, crie a coluna
-// "atualizado_em" (timestamptz) na tabela antes de reativar esse campo.
+// Único ponto de persistência de nome/cargo/telefone/email — não
+// usamos mais auth.updateUser() para evitar duplicidade de fontes.
+// O e-mail é gravado aqui porque o painel administrativo lê a
+// coluna "profiles.email" (não tem acesso a auth.users via RLS).
 // =========================================================
 
-async function sincronizarPerfil(usuarioId, nomeCompleto, cargo, telefoneFormatado) {
+async function sincronizarPerfil(usuarioId, nomeCompleto, cargo, telefoneFormatado, email) {
   const { error } = await supabaseClient
     .from("profiles")
     .upsert(
@@ -224,6 +244,7 @@ async function sincronizarPerfil(usuarioId, nomeCompleto, cargo, telefoneFormata
         nome_completo: nomeCompleto,
         cargo,
         telefone: telefoneFormatado,
+        email,
       },
       { onConflict: "id" }
     );
@@ -243,7 +264,7 @@ async function sincronizarPerfil(usuarioId, nomeCompleto, cargo, telefoneFormata
 async function marcarSenhaRedefinida(usuarioId) {
   const { error } = await supabaseClient
     .from("profiles")
-    .update({ senha_redefinida: true })
+    .update({ senha_redefinida: true, primeiro_acesso: false, senha_alterada: true })
     .eq("id", usuarioId);
 
   if (error) {
@@ -288,8 +309,6 @@ function redirecionar(destino = REDIRECT_URL, atraso = 900) {
 // 9. Fluxo principal de login (orquestração)
 // =========================================================
 
-// Guarda o usuário autenticado enquanto aguarda a redefinição
-// obrigatória de senha no primeiro acesso.
 let usuarioPendenteRedefinicao = null;
 
 async function processarLogin(evento) {
@@ -319,7 +338,9 @@ async function processarLogin(evento) {
       return;
     }
 
-    await sincronizarPerfil(usuario.id, dados.nomeCompleto, dados.cargo, dados.telefoneFormatado);
+    await sincronizarPerfil(usuario.id, dados.nomeCompleto, dados.cargo, dados.telefoneFormatado, dados.email);
+    await atualizarUltimoLogin(usuario.id);
+    await registrarAtividade(usuario.id, dados.nomeCompleto, "login");
 
     // ---------------------------------------------------------
     // 🔐 Primeiro acesso: bloqueia o fluxo normal e exige que o
@@ -377,6 +398,11 @@ async function processarRedefinicaoSenha(evento) {
     if (erroSenha) throw erroSenha;
 
     await marcarSenhaRedefinida(usuarioPendenteRedefinicao.id);
+    await registrarAtividade(
+      usuarioPendenteRedefinicao.id,
+      usuarioPendenteRedefinicao.user_metadata?.nome_completo || els.nome?.value.trim() || "Colaborador",
+      "primeiro_acesso_concluido"
+    );
 
     log("processarRedefinicaoSenha:sucesso", { id: usuarioPendenteRedefinicao.id });
 
@@ -394,10 +420,6 @@ async function processarRedefinicaoSenha(evento) {
 
 // =========================================================
 // 10. Verificação de sessão existente ao carregar a página
-// Também respeita a exigência de redefinição de senha: se a
-// sessão já existir mas a senha ainda não foi redefinida, o
-// usuário é mantido na tela de login com o modal aberto, em
-// vez de ser redirecionado diretamente ao painel.
 // =========================================================
 
 async function verificarSessaoExistente() {

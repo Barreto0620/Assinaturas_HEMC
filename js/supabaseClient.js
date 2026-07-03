@@ -48,3 +48,35 @@ export async function fazerLogout() {
   await supabaseClient.auth.signOut();
   window.location.href = "/index.html";
 }
+
+/**
+ * Garante que existe uma sessão ativa E que o usuário é admin.
+ * Caso contrário, redireciona para o gerador (usuário comum)
+ * ou para o login (sem sessão).
+ */
+export async function exigirSessaoAdmin() {
+  const sessaoInfo = await exigirSessaoAtiva();
+  if (!sessaoInfo) return null;
+
+  if (!sessaoInfo.profile?.is_admin) {
+    window.location.href = "/gerador.html";
+    return null;
+  }
+
+  return sessaoInfo;
+}
+
+/**
+ * Invoca a Edge Function admin-manage-user com o token da sessão atual.
+ */
+export async function chamarAcaoAdmin(acao, usuario_id, payload = {}) {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session) throw new Error("Sessão expirada.");
+
+  const { data, error } = await supabaseClient.functions.invoke("admin-manage-user", {
+    body: { acao, usuario_id, payload },
+  });
+
+  if (error) throw error;
+  return data;
+}
