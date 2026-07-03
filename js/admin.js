@@ -331,11 +331,46 @@ function renderizarLogs() {
   atualizarPaginacaoUI('logs', lista.length, estadoLogs);
 }
 
-// Gera um resumo curto e legível ("Nome: João → João Silva · Cargo: Analista → Coordenador")
-// a partir de detalhes.campos_alterados, para exibir direto na timeline sem precisar
+// Gera um resumo curto e legível para exibir direto na timeline, sem precisar
 // abrir o modal de detalhes.
+//
+// Para o evento de "login": sempre mostra Nome / Cargo / Ramal com que o
+// colaborador efetivamente entrou (independente de ter mudado ou não em
+// relação ao acesso anterior) — é o que aparecia "faltando" antes, pois só
+// os campos alterados eram exibidos na linha resumida.
+//
+// Para as demais ações (ex.: atualização de perfil pelo admin, ativação/
+// desativação): mantém o formato de diff ("De → Para").
 function resumoDetalhesLog(log) {
-  const alteracoes = log?.detalhes?.campos_alterados;
+  const detalhes = log?.detalhes;
+  if (!detalhes || typeof detalhes !== 'object') return '';
+
+  if (log.acao === 'login') {
+    const partes = [];
+    if (detalhes.nome_completo) {
+      partes.push(`<strong>Nome:</strong> ${escapeHtml(detalhes.nome_completo)}`);
+    }
+    if (detalhes.cargo) {
+      partes.push(`<strong>Cargo:</strong> ${escapeHtml(detalhes.cargo)}`);
+    }
+    if (detalhes.ramal) {
+      partes.push(`<strong>Ramal:</strong> ${escapeHtml(detalhes.ramal)}`);
+    }
+
+    const diff = resumoCamposAlterados(detalhes.campos_alterados);
+    if (diff) {
+      partes.push(`<span class="admin-timeline-alterado">Alterado desde o último acesso — ${diff}</span>`);
+    }
+
+    return partes.join(' &nbsp;·&nbsp; ');
+  }
+
+  return resumoCamposAlterados(detalhes.campos_alterados);
+}
+
+// Formata um objeto de diff { campo: { de, para } } em texto "De → Para",
+// usado tanto no resumo padrão quanto dentro do resumo especial de login.
+function resumoCamposAlterados(alteracoes) {
   if (!alteracoes || typeof alteracoes !== 'object') return '';
 
   const partes = Object.entries(alteracoes).map(([campo, valores]) => {

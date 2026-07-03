@@ -181,6 +181,43 @@ function validarNovaSenha(novaSenha, confirmarSenha) {
 }
 
 // =========================================================
+// 3.1 Diff dos dados de perfil (usado para registrar no log de
+// login exatamente o que mudou em relação ao acesso anterior)
+// =========================================================
+
+// Normaliza strings para comparação: remove espaços nas pontas e trata
+// string vazia como equivalente a "não preenchido" — evita falso-negativo
+// (campo marcado como "sem alteração" por causa de espaço/whitespace).
+function normalizarParaComparacao(valor) {
+  const texto = (valor ?? "").toString().trim();
+  return texto.length ? texto : null;
+}
+
+function montarDiffPerfil(perfilAntes, dados) {
+  const alteracoes = {};
+
+  const nomeAntes = normalizarParaComparacao(perfilAntes?.nome_completo);
+  const cargoAntes = normalizarParaComparacao(perfilAntes?.cargo);
+  const telefoneAntes = normalizarParaComparacao(perfilAntes?.telefone);
+
+  const nomeDepois = normalizarParaComparacao(dados.nomeCompleto);
+  const cargoDepois = normalizarParaComparacao(dados.cargo);
+  const telefoneDepois = normalizarParaComparacao(dados.telefoneFormatado);
+
+  if (nomeAntes !== nomeDepois) {
+    alteracoes.nome_completo = { de: nomeAntes, para: nomeDepois };
+  }
+  if (cargoAntes !== cargoDepois) {
+    alteracoes.cargo = { de: cargoAntes, para: cargoDepois };
+  }
+  if (telefoneAntes !== telefoneDepois) {
+    alteracoes.telefone = { de: telefoneAntes, para: telefoneDepois };
+  }
+
+  return alteracoes;
+}
+
+// =========================================================
 // 4. Autenticação
 // =========================================================
 
@@ -200,6 +237,8 @@ async function autenticar(email, senha) {
 // 5. Validação de conta ativa e verificação de primeiro acesso
 // Verifica se o perfil existe, não está desativado/bloqueado e
 // se a senha já foi redefinida (primeiro acesso).
+// Também traz nome/cargo/telefone/email já salvos, para servir de
+// base de comparação (diff) no log de login.
 // Tolerante à ausência das colunas "ativo" e "senha_redefinida"
 // (não quebra caso não existam — trata como já liberado/redefinido).
 // =========================================================
@@ -207,7 +246,7 @@ async function autenticar(email, senha) {
 async function validarContaAtiva(usuarioId) {
   const { data: perfil, error } = await supabaseClient
     .from("profiles")
-    .select("id, ativo, senha_redefinida")
+    .select("id, ativo, senha_redefinida, nome_completo, cargo, telefone, email")
     .eq("id", usuarioId)
     .maybeSingle();
 
@@ -330,7 +369,7 @@ async function processarLogin(evento) {
     const usuario = await autenticar(dados.email, dados.senha);
     log("autenticar:sucesso", { id: usuario.id });
 
-    const { ativo, senhaRedefinida } = await validarContaAtiva(usuario.id);
+    const { ativo, senhaRedefinida, perfil: perfilAntes } = await validarContaAtiva(usuario.id);
     if (!ativo) {
       await supabaseClient.auth.signOut();
       mostrarErro("Sua conta está desativada. Entre em contato com o setor de TI.");
@@ -340,7 +379,21 @@ async function processarLogin(evento) {
 
     await sincronizarPerfil(usuario.id, dados.nomeCompleto, dados.cargo, dados.telefoneFormatado, dados.email);
     await atualizarUltimoLogin(usuario.id);
-    await registrarAtividade(usuario.id, dados.nomeCompleto, "login");
+
+    // ---------------------------------------------------------
+    // 📋 Log detalhado do login — registra com qual nome, cargo e
+    // ramal o colaborador efetivamente entrou, e sinaliza (via
+    // campos_alterados) caso algum desses dados tenha mudado em
+    // relação ao que estava salvo no acesso anterior.
+    // ---------------------------------------------------------
+    const alteracoesPerfil = montarDiffPerfil(perfilAntes, dados);
+    await registrarAtividade(usuario.id, dados.nomeCompleto, "login", {
+      nome_completo: dados.nomeCompleto,
+      cargo: dados.cargo,
+      ramal: dados.telefoneFormatado,
+      email: dados.email,
+      ...(Object.keys(alteracoesPerfil).length ? { campos_alterados: alteracoesPerfil } : {}),
+    });
 
     // ---------------------------------------------------------
     // 🔐 Primeiro acesso: bloqueia o fluxo normal e exige que o
