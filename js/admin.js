@@ -37,6 +37,14 @@ const MAPA_ACOES = {
   primeiro_acesso_concluido: { rotulo: '1º acesso concluído', tom: 'sucesso', icone: '✓' },
 };
 
+// Rótulos amigáveis para os campos que aparecem nos diffs de log (nome_completo, cargo, telefone, ...)
+const MAPA_CAMPOS = {
+  nome_completo: 'Nome',
+  cargo: 'Cargo',
+  telefone: 'Ramal/Telefone',
+  ativo: 'Status',
+};
+
 // =========================================================
 // Inicialização
 // =========================================================
@@ -154,17 +162,17 @@ function obterColaboradoresFiltrados() {
   lista = lista.slice().sort((a, b) => {
     let va = a[ordenarPor];
     let vb = b[ordenarPor];
-    
+
     // Tratamento robusto para valores nulos ou indefinidos
     if (va === null || va === undefined) va = '';
     if (vb === null || vb === undefined) vb = '';
 
     if (ordenarPor === 'ativo') { va = va ? 1 : 0; vb = vb ? 1 : 0; }
     if (ordenarPor === 'ultimo_login') { va = va ? new Date(va).getTime() : 0; vb = vb ? new Date(vb).getTime() : 0; }
-    
+
     if (typeof va === 'string') va = va.toLowerCase();
     if (typeof vb === 'string') vb = vb.toLowerCase();
-    
+
     if (va < vb) return ordenarDir === 'asc' ? -1 : 1;
     if (va > vb) return ordenarDir === 'asc' ? 1 : -1;
     return 0;
@@ -294,6 +302,7 @@ function renderizarLogs() {
     const meta = MAPA_ACOES[l.acao] || { rotulo: l.acao, tom: 'neutro', icone: '•' };
     const executor = l.executado_por ? (nomesPorId[l.executado_por] || 'Admin') : 'Próprio usuário';
     const temDetalhes = l.detalhes && Object.keys(l.detalhes).length > 0;
+    const resumo = resumoDetalhesLog(l);
 
     html += `
       <div class="admin-timeline-item">
@@ -309,6 +318,7 @@ function renderizarLogs() {
             <span>por ${escapeHtml(executor)}</span>
             ${temDetalhes ? `<button class="admin-link-detalhes" data-detalhes-id="${l.id}">Ver detalhes</button>` : ''}
           </div>
+          ${resumo ? `<div class="admin-timeline-linha3">${resumo}</div>` : ''}
         </div>
       </div>`;
   });
@@ -319,6 +329,23 @@ function renderizarLogs() {
   });
 
   atualizarPaginacaoUI('logs', lista.length, estadoLogs);
+}
+
+// Gera um resumo curto e legível ("Nome: João → João Silva · Cargo: Analista → Coordenador")
+// a partir de detalhes.campos_alterados, para exibir direto na timeline sem precisar
+// abrir o modal de detalhes.
+function resumoDetalhesLog(log) {
+  const alteracoes = log?.detalhes?.campos_alterados;
+  if (!alteracoes || typeof alteracoes !== 'object') return '';
+
+  const partes = Object.entries(alteracoes).map(([campo, valores]) => {
+    const rotulo = MAPA_CAMPOS[campo] || campo;
+    const de = valores?.de ?? '—';
+    const para = valores?.para ?? '—';
+    return `<strong>${escapeHtml(rotulo)}:</strong> ${escapeHtml(String(de))} → ${escapeHtml(String(para))}`;
+  });
+
+  return partes.length ? partes.join(' &nbsp;·&nbsp; ') : '';
 }
 
 function abrirDetalhesLog(id) {
@@ -477,10 +504,10 @@ function atualizarPaginacaoUI(chave, totalItens, estado) {
 
   const elPagina = document.getElementById(`pagina-atual-${chave}`);
   if (elPagina) elPagina.textContent = `${estado.pagina} / ${totalPaginas}`;
-  
+
   const btnAnterior = document.getElementById(`pagina-anterior-${chave}`);
   if (btnAnterior) btnAnterior.disabled = estado.pagina <= 1;
-  
+
   const btnProximo = document.getElementById(`proxima-pagina-${chave}`);
   if (btnProximo) btnProximo.disabled = estado.pagina >= totalPaginas;
 }
@@ -549,12 +576,21 @@ function tratarAcaoColaborador(acao, id, dataset) {
         `Deseja ${acaoTexto} o acesso de ${colaborador.nome_completo}?`,
         async () => {
           await chamarAcaoAdmin('alternar_status', id, { ativo: !ativoAtual });
-          
+
+          // Log explícito de status, com o antes/depois, seguindo o mesmo padrão do
+          // log de edição de perfil — não depende apenas da Edge Function registrar.
+          await registrarLogDetalhado({
+            usuarioId: id,
+            nomeNoMomento: colaborador.nome_completo,
+            acao: !ativoAtual ? 'ativado' : 'desativado',
+            alteracoes: { ativo: { de: ativoAtual, para: !ativoAtual } },
+          });
+
           // Fallback defensivo: Atualiza cache local caso Realtime falhe
           colaborador.ativo = !ativoAtual;
           atualizarCards();
           renderizarColaboradores();
-          
+
           mostrarToast(`${colaborador.nome_completo} foi ${ativoAtual ? 'desativado' : 'ativado'}.`, 'sucesso');
         }
       );
@@ -597,18 +633,46 @@ function configurarModais() {
     btnSalvar.disabled = true;
     btnSalvar.textContent = 'Salvando…';
     try {
+      // Guarda o estado ANTES da edição — é essa comparação que faltava para o
+      // log mostrar exatamente o que mudou (nome antigo → novo, cargo antigo → novo etc).
+      const colaboradorAntes = TODOS_COLABORADORES.find((c) => c.id === id);
+      const telefoneNovo = ramal ? `(11) 2829-${ramal}` : undefined;
+
       const novosDados = {
         nome_completo,
         cargo,
-        telefone: ramal ? `(11) 2829-${ramal}` : undefined,
+        telefone: telefoneNovo,
       };
 
       await chamarAcaoAdmin('atualizar_perfil', id, novosDados);
 
+      // Monta o diff (somente os campos que de fato mudaram de valor)
+      const alteracoes = {};
+      if (colaboradorAntes) {
+        if ((colaboradorAntes.nome_completo || '') !== nome_completo) {
+          alteracoes.nome_completo = { de: colaboradorAntes.nome_completo || null, para: nome_completo };
+        }
+        if ((colaboradorAntes.cargo || '') !== cargo) {
+          alteracoes.cargo = { de: colaboradorAntes.cargo || null, para: cargo };
+        }
+        if (telefoneNovo !== undefined && (colaboradorAntes.telefone || '') !== telefoneNovo) {
+          alteracoes.telefone = { de: colaboradorAntes.telefone || null, para: telefoneNovo };
+        }
+      }
+
+      // Log explícito e detalhado, gravado diretamente pelo front-end — garante que
+      // nome e cargo sempre apareçam no log, independentemente do que a Edge Function
+      // "atualizar_perfil" registra (ou deixa de registrar) por conta própria.
+      await registrarLogDetalhado({
+        usuarioId: id,
+        nomeNoMomento: nome_completo,
+        acao: 'atualizacao_perfil',
+        alteracoes,
+      });
+
       // Fallback defensivo: Atualiza cache local caso Realtime falhe
-      const colaborador = TODOS_COLABORADORES.find((c) => c.id === id);
-      if (colaborador) {
-        Object.assign(colaborador, novosDados);
+      if (colaboradorAntes) {
+        Object.assign(colaboradorAntes, novosDados);
         renderizarColaboradores();
       }
 
@@ -626,11 +690,54 @@ function configurarModais() {
     const senha = document.getElementById('texto-senha-gerada').textContent;
     try {
       await navigator.clipboard.writeText(senha);
-      mostrarToast('Senha copied para a área de transferência.', 'sucesso');
+      mostrarToast('Senha copiada para a área de transferência.', 'sucesso');
     } catch {
       mostrarToast('Não foi possível copiar automaticamente.', 'alerta');
     }
   });
+}
+
+// =========================================================
+// Log detalhado — gravação direta em activity_logs
+// =========================================================
+// Centraliza a criação de eventos de log a partir do painel admin, sempre com um
+// diff explícito (de/para) quando houver alterações. Insere direto na tabela e
+// injeta o registro na timeline na hora (aplicarNovoLog), sem esperar o Realtime.
+// Se não houver nenhum campo alterado, ainda assim registra o evento (com uma
+// observação), para não mascarar ações que não resultaram em mudança real.
+async function registrarLogDetalhado({ usuarioId, nomeNoMomento, acao, alteracoes }) {
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const executadoPor = session?.user?.id || ADMIN_ATUAL?.user?.id || null;
+
+    const temAlteracoes = alteracoes && Object.keys(alteracoes).length > 0;
+    const detalhes = temAlteracoes
+      ? { campos_alterados: alteracoes }
+      : { observacao: 'Ação executada sem alteração de valores.' };
+
+    const { data: logInserido, error } = await supabaseClient
+      .from('activity_logs')
+      .insert({
+        usuario_id: usuarioId,
+        nome_no_momento: nomeNoMomento,
+        acao,
+        detalhes,
+        executado_por: executadoPor,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    if (logInserido) {
+      aplicarNovoLog(logInserido);
+    }
+  } catch (erroLog) {
+    // Não interrompe o fluxo principal (a ação em si já foi concluída) — apenas
+    // avisa no console e via toast, para não deixar o problema passar despercebido.
+    console.error('Erro ao registrar log detalhado:', erroLog);
+    mostrarToast('A ação foi concluída, mas houve falha ao registrar o log.', 'alerta');
+  }
 }
 
 // Corrigido typo interno ("mensaje" -> "mensagem")
