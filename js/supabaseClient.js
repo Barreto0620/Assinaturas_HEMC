@@ -20,14 +20,14 @@ export const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /**
  * Garante que existe uma sessão ativa.
- * Se não houver, redireciona para o login.
+ * Se não houver ou o perfil estiver corrompido, redireciona para o login.
  * Retorna { user, profile } quando válida, ou null.
  */
 export async function exigirSessaoAtiva() {
   const { data: { session }, error } = await supabaseClient.auth.getSession();
 
   if (error || !session) {
-    window.location.href = "/index.html";
+    window.location.href = "index.html";
     return null;
   }
 
@@ -38,15 +38,33 @@ export async function exigirSessaoAtiva() {
     .single();
 
   if (profileError) {
-    console.error("Erro ao carregar perfil:", profileError);
+    console.error("Erro ao carregar perfil do usuário:", profileError);
+    
+    // Tratamento para o erro PGRST116 (registro não encontrado na tabela profiles)
+    if (profileError.code === "PGRST116") {
+      alert("Seu perfil de usuário não foi encontrado no sistema. Entre em contato com o suporte.");
+    }
+    
+    // Se não há perfil válido, força o logout para evitar loops ou telas quebradas
+    await fazerLogout();
+    return null;
   }
 
   return { user: session.user, profile };
 }
 
+/**
+ * Realiza o encerramento da sessão e limpa estados locais.
+ */
 export async function fazerLogout() {
-  await supabaseClient.auth.signOut();
-  window.location.href = "/index.html";
+  try {
+    await supabaseClient.auth.signOut();
+  } catch (err) {
+    console.error("Erro ao executar signOut:", err);
+  } finally {
+    // Garante o redirecionamento mesmo se a chamada de rede falhar
+    window.location.href = "index.html";
+  }
 }
 
 /**
@@ -59,7 +77,7 @@ export async function exigirSessaoAdmin() {
   if (!sessaoInfo) return null;
 
   if (!sessaoInfo.profile?.is_admin) {
-    window.location.href = "/gerador.html";
+    window.location.href = "gerador.html";
     return null;
   }
 
@@ -71,7 +89,7 @@ export async function exigirSessaoAdmin() {
  */
 export async function chamarAcaoAdmin(acao, usuario_id, payload = {}) {
   const { data: { session } } = await supabaseClient.auth.getSession();
-  if (!session) throw new Error("Sessão expirada.");
+  if (!session) throw new Error("Sessão expirada ou inválida.");
 
   const { data, error } = await supabaseClient.functions.invoke("admin-manage-user", {
     body: { acao, usuario_id, payload },

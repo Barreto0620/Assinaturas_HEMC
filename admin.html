@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Painel Administrativo | Assina.ai HEMC</title>
   <link rel="icon" type="image/x-icon" href="img/favicon.ico">
+  
   <script>
     (function () {
       try {
@@ -13,6 +14,7 @@
       } catch (e) {}
     })();
   </script>
+  
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/admin.css">
 </head>
@@ -20,7 +22,6 @@
 
   <div class="admin-shell">
 
-    <!-- ===== Barra superior ===== -->
     <div class="admin-topo">
       <div class="admin-marca">
         <span class="admin-logo-dot"></span>
@@ -30,78 +31,112 @@
         </div>
       </div>
       <div class="admin-acoes-topo">
-        <span class="admin-usuario-logado">Admin: <strong id="admin-nome-topo">-</strong></span>
+        <span class="conexao-status" id="conexao-status" data-estado="conectando" title="Status da conexão em tempo real">
+          <span class="conexao-dot"></span>
+          <span id="conexao-texto">Conectando…</span>
+        </span>
+        <span class="admin-usuario-logado">Admin: <strong id="admin-nome-topo">—</strong></span>
         <button type="button" class="theme-toggle" id="btn-tema">
           <span class="theme-toggle-track"><span class="theme-toggle-thumb"></span></span>
           <span id="theme-toggle-label">Escuro</span>
         </button>
-        <a href="gerador.html" class="btn btn-secundario">Ir ao Gerador</a>
+        <a href="gerador.html" class="btn btn-secundario" style="text-decoration:none;" >🖌️ Gerador</a>
         <button id="btn-logout" class="btn btn-secundario">Sair</button>
       </div>
     </div>
 
-    <!-- ===== Cards de resumo ===== -->
-    <div class="admin-cards">
+   
+
+    <div class="admin-cards" id="admin-cards">
       <div class="admin-card">
         <span class="admin-card-label">Total de Colaboradores</span>
-        <span class="admin-card-valor" id="card-total">-</span>
+        <span class="admin-card-valor skeleton-valor" id="card-total">—</span>
       </div>
       <div class="admin-card admin-card-ativo">
         <span class="admin-card-label">Ativos</span>
-        <span class="admin-card-valor" id="card-ativos">-</span>
+        <span class="admin-card-valor skeleton-valor" id="card-ativos">—</span>
       </div>
       <div class="admin-card admin-card-inativo">
         <span class="admin-card-label">Inativos</span>
-        <span class="admin-card-valor" id="card-inativos">-</span>
+        <span class="admin-card-valor skeleton-valor" id="card-inativos">—</span>
       </div>
       <div class="admin-card">
         <span class="admin-card-label">Ações nas últimas 24h</span>
-        <span class="admin-card-valor" id="card-atividade-24h">-</span>
+        <span class="admin-card-valor skeleton-valor" id="card-atividade-24h">—</span>
       </div>
     </div>
 
-    <!-- ===== Abas ===== -->
     <div class="admin-tabs">
       <button class="admin-tab ativo" data-tab="tab-colaboradores">Colaboradores</button>
-      <button class="admin-tab" data-tab="tab-logs">Logs de Atividade</button>
+      <button class="admin-tab" data-tab="tab-logs">Atividade</button>
     </div>
 
-    <!-- ===== Aba: Colaboradores ===== -->
     <div class="admin-tab-content ativo" id="tab-colaboradores">
-      <div class="admin-filtros">
-        <input type="text" id="filtro-nome" placeholder="Buscar por nome ou e-mail...">
-        <select id="filtro-status">
-          <option value="todos">Todos os status</option>
-          <option value="ativo">Somente ativos</option>
-          <option value="inativo">Somente inativos</option>
-        </select>
+      <div class="admin-toolbar">
+        <div class="admin-busca">
+          <svg class="admin-busca-icone" width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="7" cy="7" r="5.25" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M11 11L14.5 14.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <input type="text" id="filtro-nome" placeholder="Buscar por nome ou e-mail…">
+        </div>
+        <div class="admin-chips" id="filtro-status-chips" role="group" aria-label="Filtrar por status">
+          <button class="admin-chip ativo" data-status="todos" type="button">Todos</button>
+          <button class="admin-chip" data-status="ativo" type="button">Ativos</button>
+          <button class="admin-chip" data-status="inativo" type="button">Inativos</button>
+        </div>
+        <span class="admin-contagem" id="contagem-colaboradores"></span>
       </div>
 
       <div class="admin-tabela-wrap">
         <table class="admin-tabela" id="tabela-colaboradores">
           <thead>
             <tr>
-              <th>Nome</th>
+              <th class="ordenavel" data-campo="nome_completo">Nome</th>
               <th>E-mail</th>
               <th>Cargo</th>
-              <th>Status</th>
-              <th>Primeiro Acesso</th>
-              <th>Último Login</th>
-              <th>Ações</th>
+              <th class="ordenavel" data-campo="ativo">Status</th>
+              <th>1º Acesso</th>
+              <th class="ordenavel" data-campo="ultimo_login">Último Login</th>
+              <th class="admin-th-acoes">Ações</th>
             </tr>
           </thead>
           <tbody id="corpo-tabela-colaboradores">
-            <tr><td colspan="7" class="admin-tabela-vazia">Carregando...</td></tr>
+            <tr class="admin-skeleton-row"><td colspan="7"><div class="skeleton-linha"></div></td></tr>
+            <tr class="admin-skeleton-row"><td colspan="7"><div class="skeleton-linha"></div></td></tr>
+            <tr class="admin-skeleton-row"><td colspan="7"><div class="skeleton-linha"></div></td></tr>
           </tbody>
         </table>
       </div>
+
+      <div class="admin-paginacao" id="paginacao-colaboradores">
+        <div class="paginacao-info" id="paginacao-info-colaboradores">—</div>
+        <div class="paginacao-controles">
+          <label class="paginacao-tamanho">
+            Por página
+            <select id="tamanho-pagina-colaboradores">
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+            </select>
+          </label>
+          <button class="btn-paginacao" id="pagina-anterior-colaboradores" aria-label="Página anterior">‹</button>
+          <span class="paginacao-atual" id="pagina-atual-colaboradores">1 / 1</span>
+          <button class="btn-paginacao" id="proxima-pagina-colaboradores" aria-label="Próxima página">›</button>
+        </div>
+      </div>
     </div>
 
-    <!-- ===== Aba: Logs ===== -->
     <div class="admin-tab-content" id="tab-logs">
-      <div class="admin-filtros">
-        <input type="text" id="filtro-log-nome" placeholder="Buscar por colaborador...">
-        <select id="filtro-log-acao">
+      <div class="admin-toolbar">
+        <div class="admin-busca">
+          <svg class="admin-busca-icone" width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="7" cy="7" r="5.25" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M11 11L14.5 14.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <input type="text" id="filtro-log-nome" placeholder="Buscar por colaborador…">
+        </div>
+        <select id="filtro-log-acao" class="admin-select">
           <option value="todas">Todas as ações</option>
           <option value="login">Login</option>
           <option value="cadastro">Cadastro</option>
@@ -112,65 +147,73 @@
           <option value="desativado">Desativação</option>
           <option value="primeiro_acesso_concluido">1º acesso concluído</option>
         </select>
-        <input type="date" id="filtro-log-data-inicio">
-        <input type="date" id="filtro-log-data-fim">
-        <button id="btn-exportar-csv" class="btn">Exportar CSV</button>
+        <input type="date" id="filtro-log-data-inicio" class="admin-select" aria-label="Data inicial">
+        <input type="date" id="filtro-log-data-fim" class="admin-select" aria-label="Data final">
+        <span class="live-badge" id="live-indicator"><span class="live-dot"></span>Ao vivo</span>
+        <button id="btn-exportar-csv" class="btn btn-secundario">Exportar CSV</button>
       </div>
 
-      <div class="admin-tabela-wrap">
-        <table class="admin-tabela" id="tabela-logs">
-          <thead>
-            <tr>
-              <th>Data/Hora</th>
-              <th>Colaborador</th>
-              <th>Ação</th>
-              <th>Detalhes</th>
-              <th>Executado por</th>
-            </tr>
-          </thead>
-          <tbody id="corpo-tabela-logs">
-            <tr><td colspan="5" class="admin-tabela-vazia">Carregando...</td></tr>
-          </tbody>
-        </table>
+      <div class="admin-timeline-wrap">
+        <div class="admin-timeline" id="timeline-logs">
+          <div class="skeleton-linha" style="height:64px; margin-bottom:10px;"></div>
+          <div class="skeleton-linha" style="height:64px; margin-bottom:10px;"></div>
+          <div class="skeleton-linha" style="height:64px;"></div>
+        </div>
+      </div>
+
+      <div class="admin-paginacao" id="paginacao-logs">
+        <div class="paginacao-info" id="paginacao-info-logs">—</div>
+        <div class="paginacao-controles">
+          <label class="paginacao-tamanho">
+            Por página
+            <select id="tamanho-pagina-logs">
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+            </select>
+          </label>
+          <button class="btn-paginacao" id="pagina-anterior-logs" aria-label="Página anterior">‹</button>
+          <span class="paginacao-atual" id="pagina-atual-logs">1 / 1</span>
+          <button class="btn-paginacao" id="proxima-pagina-logs" aria-label="Próxima página">›</button>
+        </div>
       </div>
     </div>
 
   </div>
 
-  <!-- ===== Modal: Editar Colaborador ===== -->
   <div class="admin-overlay" id="modal-editar">
     <div class="admin-modal">
       <div class="admin-modal-header">
         <h3>Editar Colaborador</h3>
-        <button class="admin-modal-fechar" data-fechar>&times;</button>
+        <button class="admin-modal-fechar" data-fechar aria-label="Fechar">&times;</button>
       </div>
       <form id="form-editar-colaborador">
         <input type="hidden" id="edit-id">
         <div class="campo">
-          <label>Nome completo</label>
+          <label for="edit-nome">Nome completo</label>
           <input type="text" id="edit-nome" required>
         </div>
         <div class="campo">
-          <label>Cargo</label>
+          <label for="edit-cargo">Cargo</label>
           <input type="text" id="edit-cargo" required>
         </div>
         <div class="campo">
-          <label>Ramal (4 dígitos)</label>
-          <input type="text" id="edit-ramal" maxlength="4" pattern="\d{4}">
+          <label for="edit-ramal">Ramal (4 dígitos)</label>
+          <input type="text" id="edit-ramal" maxlength="4" pattern="\d{4}" inputmode="numeric">
         </div>
         <div class="admin-modal-acoes">
-          <button type="submit" class="btn">Salvar alterações</button>
+          <button type="submit" class="btn" id="btn-salvar-edicao">Salvar alterações</button>
+          <button type="button" class="btn btn-secundario" data-fechar>Cancelar</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- ===== Modal: Confirmar ação (desativar/reset) ===== -->
   <div class="admin-overlay" id="modal-confirmar">
     <div class="admin-modal admin-modal-pequeno">
       <div class="admin-modal-header">
         <h3 id="confirmar-titulo">Confirmar ação</h3>
-        <button class="admin-modal-fechar" data-fechar>&times;</button>
+        <button class="admin-modal-fechar" data-fechar aria-label="Fechar">&times;</button>
       </div>
       <p id="confirmar-texto" class="admin-modal-texto"></p>
       <div class="admin-modal-acoes">
@@ -180,20 +223,38 @@
     </div>
   </div>
 
-  <!-- ===== Modal: Senha temporária gerada ===== -->
   <div class="admin-overlay" id="modal-senha-gerada">
     <div class="admin-modal admin-modal-pequeno">
       <div class="admin-modal-header">
         <h3>Senha redefinida</h3>
-        <button class="admin-modal-fechar" data-fechar>&times;</button>
+        <button class="admin-modal-fechar" data-fechar aria-label="Fechar">&times;</button>
       </div>
       <p class="admin-modal-texto">Informe esta senha temporária ao colaborador. Ele deverá trocá-la no próximo acesso.</p>
-      <div class="admin-senha-gerada" id="texto-senha-gerada">-</div>
+      <div class="admin-senha-gerada-wrap">
+        <div class="admin-senha-gerada" id="texto-senha-gerada">-</div>
+        <button class="btn-copiar" id="btn-copiar-senha" title="Copiar senha" type="button">Copiar</button>
+      </div>
       <div class="admin-modal-acoes">
         <button class="btn" data-fechar>Fechar</button>
       </div>
     </div>
   </div>
+
+  <div class="admin-overlay" id="modal-detalhes-log">
+    <div class="admin-modal">
+      <div class="admin-modal-header">
+        <h3>Detalhes do evento</h3>
+        <button class="admin-modal-fechar" data-fechar aria-label="Fechar">&times;</button>
+      </div>
+      <div class="admin-detalhes-resumo" id="detalhes-log-resumo"></div>
+      <pre class="admin-json-viewer" id="conteudo-detalhes-log"></pre>
+      <div class="admin-modal-acoes">
+        <button class="btn btn-secundario" data-fechar>Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
   <script type="module" src="js/admin.js"></script>
 </body>

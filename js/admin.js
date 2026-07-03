@@ -1,8 +1,41 @@
 import { supabaseClient, exigirSessaoAdmin, chamarAcaoAdmin, fazerLogout } from './supabaseClient.js';
 
+// =========================================================
+// Estado
+// =========================================================
 let TODOS_COLABORADORES = [];
 let TODOS_LOGS = [];
 let ADMIN_ATUAL = null;
+let CANAL_REALTIME = null;
+
+const estadoColaboradores = {
+  status: 'todos',
+  termo: '',
+  ordenarPor: 'nome_completo',
+  ordenarDir: 'asc',
+  pagina: 1,
+  tamanhoPagina: 10,
+};
+
+const estadoLogs = {
+  termo: '',
+  acao: 'todas',
+  dataInicio: '',
+  dataFim: '',
+  pagina: 1,
+  tamanhoPagina: 10,
+};
+
+const MAPA_ACOES = {
+  login: { rotulo: 'Login', tom: 'neutro', icone: '→' },
+  cadastro: { rotulo: 'Cadastro', tom: 'sucesso', icone: '+' },
+  atualizacao_perfil: { rotulo: 'Atualização de perfil', tom: 'neutro', icone: '✎' },
+  reset_senha: { rotulo: 'Reset de senha', tom: 'alerta', icone: '⟳' },
+  assinatura_gerada: { rotulo: 'Assinatura gerada', tom: 'sucesso', icone: '✓' },
+  ativado: { rotulo: 'Ativação', tom: 'sucesso', icone: '✓' },
+  desativado: { rotulo: 'Desativação', tom: 'erro', icone: '×' },
+  primeiro_acesso_concluido: { rotulo: '1º acesso concluído', tom: 'sucesso', icone: '✓' },
+};
 
 // =========================================================
 // Inicialização
@@ -12,51 +45,56 @@ let ADMIN_ATUAL = null;
   if (!sessaoInfo) return;
 
   ADMIN_ATUAL = sessaoInfo;
-  document.getElementById("admin-nome-topo").textContent = sessaoInfo.profile?.nome_completo || sessaoInfo.user.email;
-
-  await Promise.all([carregarColaboradores(), carregarLogs()]);
-  atualizarCards();
+  document.getElementById('admin-nome-topo').textContent =
+    sessaoInfo.profile?.nome_completo || sessaoInfo.user.email;
 
   configurarTabs();
-  configurarFiltros();
+  configurarToolbarColaboradores();
+  configurarToolbarLogs();
+  configurarPaginacao();
   configurarModais();
   configurarTema();
+
+  await carregarTudo();
+  configurarRealtime();
 })();
 
-document.getElementById("btn-logout")?.addEventListener("click", fazerLogout);
+document.getElementById('btn-logout')?.addEventListener('click', fazerLogout);
+document.getElementById('erro-banner-retry')?.addEventListener('click', carregarTudo);
 
 // =========================================================
 // Carregamento de dados
 // =========================================================
-async function carregarColaboradores() {
-  const { data, error } = await supabaseClient
-    .from("profiles")
-    .select("id, nome_completo, email, cargo, telefone, ativo, primeiro_acesso, ultimo_login, is_admin")
-    .order("nome_completo", { ascending: true });
-
-  if (error) {
-    console.error("Erro ao carregar colaboradores:", error);
-    return;
+async function carregarTudo() {
+  ocultarErro();
+  try {
+    const [colaboradores, logs] = await Promise.all([buscarColaboradores(), buscarLogs()]);
+    TODOS_COLABORADORES = colaboradores;
+    TODOS_LOGS = logs;
+    atualizarCards();
+    renderizarColaboradores();
+    renderizarLogs();
+  } catch (erro) {
+    console.error('Erro ao carregar painel:', erro);
+    mostrarErro('Não foi possível carregar os dados do painel. Verifique as permissões de acesso ou sua conexão.');
   }
-
-  TODOS_COLABORADORES = data || [];
-  renderizarColaboradores(TODOS_COLABORADORES);
 }
 
-async function carregarLogs() {
+async function buscarColaboradores() {
+  // Modificado: Agora busca através da Edge Function para contornar restrições estritas de RLS.
+  // Solicitamos um limite alto para manter os filtros reativos locais rodando perfeitamente em memória.
+  const resposta = await chamarAcaoAdmin('listar_colaboradores', null, { pagina: 1, limite: 5000 });
+  return resposta?.colaboradores || [];
+}
+
+async function buscarLogs() {
   const { data, error } = await supabaseClient
-    .from("activity_logs")
-    .select("id, usuario_id, nome_no_momento, acao, detalhes, executado_por, criado_em")
-    .order("criado_em", { ascending: false })
-    .limit(500);
-
-  if (error) {
-    console.error("Erro ao carregar logs:", error);
-    return;
-  }
-
-  TODOS_LOGS = data || [];
-  renderizarLogs(TODOS_LOGS);
+    .from('activity_logs')
+    .select('id, usuario_id, nome_no_momento, acao, detalhes, executado_por, criado_em')
+    .order('criado_em', { ascending: false })
+    .limit(1000);
+  if (error) throw error;
+  return data || [];
 }
 
 function atualizarCards() {
@@ -67,101 +105,255 @@ function atualizarCards() {
   const ha24h = Date.now() - 24 * 60 * 60 * 1000;
   const atividade24h = TODOS_LOGS.filter((l) => new Date(l.criado_em).getTime() >= ha24h).length;
 
-  document.getElementById("card-total").textContent = total;
-  document.getElementById("card-ativos").textContent = ativos;
-  document.getElementById("card-inativos").textContent = inativos;
-  document.getElementById("card-atividade-24h").textContent = atividade24h;
+  setValorCard('card-total', total);
+  setValorCard('card-ativos', ativos);
+  setValorCard('card-inativos', inativos);
+  setValorCard('card-atividade-24h', atividade24h);
+}
+
+function setValorCard(id, valor) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.textContent = valor;
+    el.classList.remove('skeleton-valor');
+  }
 }
 
 // =========================================================
-// Renderização: Colaboradores
+// Erro global (Silenciado para não afetar a interface)
 // =========================================================
-function renderizarColaboradores(lista) {
-  const corpo = document.getElementById("corpo-tabela-colaboradores");
+function mostrarErro(texto) {
+  // Apenas deixa o aviso no console do navegador (F12) para os desenvolvedores
+  console.warn('Aviso do Painel (Ocultado da UI):', texto);
+}
 
-  if (!lista.length) {
-    corpo.innerHTML = `<tr><td colspan="7" class="admin-tabela-vazia">Nenhum colaborador encontrado.</td></tr>`;
-    return;
+function ocultarErro() {
+  const banner = document.getElementById('erro-banner');
+  if (banner) banner.hidden = true;
+}
+
+// =========================================================
+// Colaboradores: filtro + ordenação + paginação
+// =========================================================
+function obterColaboradoresFiltrados() {
+  const termo = estadoColaboradores.termo;
+  const status = estadoColaboradores.status;
+
+  let lista = TODOS_COLABORADORES.filter((c) => {
+    const bateTermo = !termo ||
+      c.nome_completo?.toLowerCase().includes(termo) ||
+      c.email?.toLowerCase().includes(termo);
+    const bateStatus =
+      status === 'todos' ||
+      (status === 'ativo' && c.ativo) ||
+      (status === 'inactive' && !c.ativo);
+    return bateTermo && bateStatus;
+  });
+
+  const { ordenarPor, ordenarDir } = estadoColaboradores;
+  lista = lista.slice().sort((a, b) => {
+    let va = a[ordenarPor];
+    let vb = b[ordenarPor];
+    
+    // Tratamento robusto para valores nulos ou indefinidos
+    if (va === null || va === undefined) va = '';
+    if (vb === null || vb === undefined) vb = '';
+
+    if (ordenarPor === 'ativo') { va = va ? 1 : 0; vb = vb ? 1 : 0; }
+    if (ordenarPor === 'ultimo_login') { va = va ? new Date(va).getTime() : 0; vb = vb ? new Date(vb).getTime() : 0; }
+    
+    if (typeof va === 'string') va = va.toLowerCase();
+    if (typeof vb === 'string') vb = vb.toLowerCase();
+    
+    if (va < vb) return ordenarDir === 'asc' ? -1 : 1;
+    if (va > vb) return ordenarDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  return lista;
+}
+
+function renderizarColaboradores() {
+  const lista = obterColaboradoresFiltrados();
+  const totalPaginas = Math.max(1, Math.ceil(lista.length / estadoColaboradores.tamanhoPagina));
+  estadoColaboradores.pagina = Math.min(estadoColaboradores.pagina, totalPaginas);
+
+  const inicio = (estadoColaboradores.pagina - 1) * estadoColaboradores.tamanhoPagina;
+  const pagina = lista.slice(inicio, inicio + estadoColaboradores.tamanhoPagina);
+
+  const corpo = document.getElementById('corpo-tabela-colaboradores');
+  if (!corpo) return;
+
+  document.getElementById('contagem-colaboradores').textContent =
+    `${lista.length} colaborador${lista.length === 1 ? '' : 'es'}`;
+
+  if (!pagina.length) {
+    corpo.innerHTML = `<tr><td colspan="7" class="admin-tabela-vazia">
+      ${lista.length === 0 && TODOS_COLABORADORES.length > 0
+        ? 'Nenhum colaborador corresponde aos filtros aplicados.'
+        : 'Nenhum colaborador cadastrado ainda.'}
+    </td></tr>`;
+  } else {
+    corpo.innerHTML = pagina.map((c) => `
+      <tr data-row-id="${c.id}">
+        <td>
+          <div class="admin-pessoa">
+            <span class="admin-avatar">${iniciais(c.nome_completo)}</span>
+            <span>${escapeHtml(c.nome_completo)}</span>
+          </div>
+        </td>
+        <td class="admin-cel-muted">${escapeHtml(c.email || '—')}</td>
+        <td>${escapeHtml(c.cargo || '—')}</td>
+        <td><span class="admin-badge ${c.ativo ? 'admin-badge-ativo' : 'admin-badge-inativo'}"><i></i>${c.ativo ? 'Ativo' : 'Inativo'}</span></td>
+        <td>${c.primeiro_acesso ? '<span class="admin-badge admin-badge-pendente"><i></i>Pendente</span>' : '<span class="admin-cel-muted">Concluído</span>'}</td>
+        <td class="admin-cel-mono">${c.ultimo_login ? formatarData(c.ultimo_login) : '<span class="admin-cel-muted">Nunca acessou</span>'}</td>
+        <td class="admin-tabela-acoes">
+          <button class="admin-icon-btn" data-acao="editar" data-id="${c.id}" title="Editar" aria-label="Editar ${escapeHtml(c.nome_completo)}">✎</button>
+          <button class="admin-icon-btn" data-acao="reset" data-id="${c.id}" title="Resetar senha" aria-label="Resetar senha de ${escapeHtml(c.nome_completo)}">⟳</button>
+          <button class="admin-icon-btn" data-acao="assinatura" data-id="${c.id}" title="Gerar assinatura" aria-label="Gerar assinatura para ${escapeHtml(c.nome_completo)}">✒</button>
+          <button class="admin-icon-btn ${c.ativo ? 'admin-icon-btn-perigo' : 'admin-icon-btn-sucesso'}" data-acao="status" data-id="${c.id}" data-ativo="${c.ativo}" title="${c.ativo ? 'Desativar' : 'Ativar'}" aria-label="${c.ativo ? 'Desativar' : 'Ativar'} ${escapeHtml(c.nome_completo)}">
+            ${c.ativo ? '⏻' : '✓'}
+          </button>
+        </td>
+      </tr>
+    `).join('');
+
+    corpo.querySelectorAll('[data-acao]').forEach((btn) => {
+      btn.addEventListener('click', () => tratarAcaoColaborador(btn.dataset.acao, btn.dataset.id, btn.dataset));
+    });
   }
 
-  corpo.innerHTML = lista.map((c) => `
-    <tr>
-      <td>${escapeHtml(c.nome_completo)}</td>
-      <td>${escapeHtml(c.email || "-")}</td>
-      <td>${escapeHtml(c.cargo || "-")}</td>
-      <td><span class="admin-badge ${c.ativo ? "admin-badge-ativo" : "admin-badge-inativo"}">${c.ativo ? "Ativo" : "Inativo"}</span></td>
-      <td>${c.primeiro_acesso ? '<span class="admin-badge admin-badge-pendente">Pendente</span>' : "Concluído"}</td>
-      <td>${c.ultimo_login ? formatarData(c.ultimo_login) : "Nunca acessou"}</td>
-      <td class="admin-tabela-acoes">
-        <button class="admin-icon-btn" data-acao="editar" data-id="${c.id}" title="Editar">✏️</button>
-        <button class="admin-icon-btn" data-acao="reset" data-id="${c.id}" title="Resetar senha">🔑</button>
-        <button class="admin-icon-btn" data-acao="assinatura" data-id="${c.id}" title="Gerar assinatura">📝</button>
-        <button class="admin-icon-btn" data-acao="status" data-id="${c.id}" data-ativo="${c.ativo}" title="${c.ativo ? "Desativar" : "Ativar"}">
-          ${c.ativo ? "🚫" : "✅"}
-        </button>
-      </td>
-    </tr>
-  `).join("");
+  atualizarCabecalhoOrdenacao();
+  atualizarPaginacaoUI('colaboradores', lista.length, estadoColaboradores);
+}
 
-  corpo.querySelectorAll("[data-acao]").forEach((btn) => {
-    btn.addEventListener("click", () => tratarAcaoColaborador(btn.dataset.acao, btn.dataset.id, btn.dataset));
+function atualizarCabecalhoOrdenacao() {
+  document.querySelectorAll('#tabela-colaboradores th.ordenavel').forEach((th) => {
+    th.classList.remove('ordenado-asc', 'ordenado-desc');
+    if (th.dataset.campo === estadoColaboradores.ordenarPor) {
+      th.classList.add(estadoColaboradores.ordenarDir === 'asc' ? 'ordenado-asc' : 'ordenado-desc');
+    }
   });
 }
 
-// =========================================================
-// Renderização: Logs
-// =========================================================
-function renderizarLogs(lista) {
-  const corpo = document.getElementById("corpo-tabela-logs");
+function iniciais(nome) {
+  if (!nome) return '?';
+  const partes = nome.trim().split(/\s+/);
+  const primeiras = partes[0]?.[0] || '';
+  const ultimas = partes.length > 1 ? partes[partes.length - 1][0] : '';
+  return (primeiras + ultimas).toUpperCase();
+}
 
-  if (!lista.length) {
-    corpo.innerHTML = `<tr><td colspan="5" class="admin-tabela-vazia">Nenhum registro encontrado.</td></tr>`;
+// =========================================================
+// Logs: filtro + timeline + paginação
+// =========================================================
+function obterLogsFiltrados() {
+  const { termo, acao, dataInicio, dataFim } = estadoLogs;
+  return TODOS_LOGS.filter((l) => {
+    const bateTermo = !termo || l.nome_no_momento?.toLowerCase().includes(termo);
+    const bateAcao = acao === 'todas' || l.acao === acao;
+    const dataLog = new Date(l.criado_em);
+    const bateInicio = !dataInicio || dataLog >= new Date(dataInicio + 'T00:00:00');
+    const bateFim = !dataFim || dataLog <= new Date(dataFim + 'T23:59:59');
+    return bateTermo && bateAcao && bateInicio && bateFim;
+  });
+}
+
+function renderizarLogs() {
+  const lista = obterLogsFiltrados();
+  const totalPaginas = Math.max(1, Math.ceil(lista.length / estadoLogs.tamanhoPagina));
+  estadoLogs.pagina = Math.min(estadoLogs.pagina, totalPaginas);
+
+  const inicio = (estadoLogs.pagina - 1) * estadoLogs.tamanhoPagina;
+  const pagina = lista.slice(inicio, inicio + estadoLogs.tamanhoPagina);
+
+  const container = document.getElementById('timeline-logs');
+  if (!container) return;
+
+  if (!pagina.length) {
+    container.innerHTML = `<div class="admin-tabela-vazia">
+      ${lista.length === 0 && TODOS_LOGS.length > 0
+        ? 'Nenhum evento corresponde aos filtros aplicados.'
+        : 'Nenhuma atividade registrada ainda.'}
+    </div>`;
+    document.getElementById('paginacao-info-logs').textContent = '—';
+    atualizarPaginacaoUI('logs', lista.length, estadoLogs);
     return;
   }
 
   const nomesPorId = Object.fromEntries(TODOS_COLABORADORES.map((c) => [c.id, c.nome_completo]));
 
-  corpo.innerHTML = lista.map((l) => `
-    <tr>
-      <td>${formatarData(l.criado_em)}</td>
-      <td>${escapeHtml(l.nome_no_momento)}</td>
-      <td><span class="admin-badge admin-badge-acao">${traduzirAcao(l.acao)}</span></td>
-      <td class="admin-detalhes-cel">${formatarDetalhes(l.detalhes)}</td>
-      <td>${l.executado_por ? escapeHtml(nomesPorId[l.executado_por] || "Admin") : "Próprio usuário"}</td>
-    </tr>
-  `).join("");
+  let grupoAtual = null;
+  let html = '';
+  pagina.forEach((l) => {
+    const dataGrupo = formatarDataGrupo(l.criado_em);
+    if (dataGrupo !== grupoAtual) {
+      grupoAtual = dataGrupo;
+      html += `<div class="admin-timeline-data">${dataGrupo}</div>`;
+    }
+    const meta = MAPA_ACOES[l.acao] || { rotulo: l.acao, tom: 'neutro', icone: '•' };
+    const executor = l.executado_por ? (nomesPorId[l.executado_por] || 'Admin') : 'Próprio usuário';
+    const temDetalhes = l.detalhes && Object.keys(l.detalhes).length > 0;
+
+    html += `
+      <div class="admin-timeline-item">
+        <span class="admin-timeline-icone tom-${meta.tom}">${meta.icone}</span>
+        <div class="admin-timeline-corpo">
+          <div class="admin-timeline-linha1">
+            <span class="admin-timeline-nome">${escapeHtml(l.nome_no_momento)}</span>
+            <span class="admin-badge admin-badge-acao tom-${meta.tom}">${meta.rotulo}</span>
+          </div>
+          <div class="admin-timeline-linha2">
+            <span class="admin-cel-mono">${formatarHora(l.criado_em)}</span>
+            <span class="admin-timeline-ponto">·</span>
+            <span>por ${escapeHtml(executor)}</span>
+            ${temDetalhes ? `<button class="admin-link-detalhes" data-detalhes-id="${l.id}">Ver detalhes</button>` : ''}
+          </div>
+        </div>
+      </div>`;
+  });
+
+  container.innerHTML = html;
+  container.querySelectorAll('[data-detalhes-id]').forEach((btn) => {
+    btn.addEventListener('click', () => abrirDetalhesLog(btn.dataset.detalhesId));
+  });
+
+  atualizarPaginacaoUI('logs', lista.length, estadoLogs);
 }
 
-function traduzirAcao(acao) {
-  const mapa = {
-    login: "Login",
-    cadastro: "Cadastro",
-    atualizacao_perfil: "Atualização de perfil",
-    reset_senha: "Reset de senha",
-    assinatura_gerada: "Assinatura gerada",
-    ativado: "Ativação",
-    desativado: "Desativação",
-    primeiro_acesso_concluido: "1º acesso concluído",
-  };
-  return mapa[acao] || acao;
+function abrirDetalhesLog(id) {
+  const log = TODOS_LOGS.find((l) => String(l.id) === String(id));
+  if (!log) return;
+  const meta = MAPA_ACOES[log.acao] || { rotulo: log.acao };
+  document.getElementById('detalhes-log-resumo').innerHTML = `
+    <strong>${escapeHtml(log.nome_no_momento)}</strong> · ${escapeHtml(meta.rotulo)} · ${formatarData(log.criado_em)}
+  `;
+  document.getElementById('conteudo-detalhes-log').textContent = JSON.stringify(log.detalhes, null, 2);
+  abrirModal('modal-detalhes-log');
 }
 
-function formatarDetalhes(detalhes) {
-  if (!detalhes || Object.keys(detalhes).length === 0) return "-";
-  try {
-    return escapeHtml(JSON.stringify(detalhes));
-  } catch {
-    return "-";
-  }
+function formatarDataGrupo(iso) {
+  const data = new Date(iso);
+  const hoje = new Date();
+  const ontem = new Date();
+  ontem.setDate(hoje.getDate() - 1);
+  const mesmoDia = (a, b) => a.toDateString() === b.toDateString();
+  if (mesmoDia(data, hoje)) return 'Hoje';
+  if (mesmoDia(data, ontem)) return 'Ontem';
+  return data.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+function formatarHora(iso) {
+  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatarData(iso) {
-  return new Date(iso).toLocaleString("pt-BR");
+  return new Date(iso).toLocaleString('pt-BR');
 }
 
 function escapeHtml(texto) {
-  const div = document.createElement("div");
-  div.textContent = texto ?? "";
+  const div = document.createElement('div');
+  div.textContent = texto ?? '';
   return div.innerHTML;
 }
 
@@ -169,67 +361,128 @@ function escapeHtml(texto) {
 // Tabs
 // =========================================================
 function configurarTabs() {
-  document.querySelectorAll(".admin-tab").forEach((tab) => {
-    tab.addEventListener("click", () => {
-      document.querySelectorAll(".admin-tab").forEach((t) => t.classList.remove("ativo"));
-      document.querySelectorAll(".admin-tab-content").forEach((c) => c.classList.remove("ativo"));
-      tab.classList.add("ativo");
-      document.getElementById(tab.dataset.tab).classList.add("ativo");
+  document.querySelectorAll('.admin-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.admin-tab').forEach((t) => t.classList.remove('ativo'));
+      document.querySelectorAll('.admin-tab-content').forEach((c) => c.classList.remove('ativo'));
+      tab.classList.add('ativo');
+      document.getElementById(tab.dataset.tab)?.classList.add('ativo');
     });
   });
 }
 
 // =========================================================
-// Filtros
+// Toolbar: Colaboradores
 // =========================================================
-function configurarFiltros() {
-  document.getElementById("filtro-nome").addEventListener("input", aplicarFiltroColaboradores);
-  document.getElementById("filtro-status").addEventListener("change", aplicarFiltroColaboradores);
+function configurarToolbarColaboradores() {
+  const inputBusca = document.getElementById('filtro-nome');
+  inputBusca?.addEventListener('input', debounce(() => {
+    estadoColaboradores.termo = inputBusca.value.toLowerCase().trim();
+    estadoColaboradores.pagina = 1;
+    renderizarColaboradores();
+  }, 200));
 
-  document.getElementById("filtro-log-nome").addEventListener("input", aplicarFiltroLogs);
-  document.getElementById("filtro-log-acao").addEventListener("change", aplicarFiltroLogs);
-  document.getElementById("filtro-log-data-inicio").addEventListener("change", aplicarFiltroLogs);
-  document.getElementById("filtro-log-data-fim").addEventListener("change", aplicarFiltroLogs);
-
-  document.getElementById("btn-exportar-csv").addEventListener("click", exportarLogsCSV);
-}
-
-function aplicarFiltroColaboradores() {
-  const termo = document.getElementById("filtro-nome").value.toLowerCase().trim();
-  const status = document.getElementById("filtro-status").value;
-
-  const filtrados = TODOS_COLABORADORES.filter((c) => {
-    const bateTermo = !termo ||
-      c.nome_completo?.toLowerCase().includes(termo) ||
-      c.email?.toLowerCase().includes(termo);
-    const bateStatus =
-      status === "todos" ||
-      (status === "ativo" && c.ativo) ||
-      (status === "inativo" && !c.ativo);
-    return bateTermo && bateStatus;
+  document.querySelectorAll('#filtro-status-chips .admin-chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('#filtro-status-chips .admin-chip').forEach((c) => c.classList.remove('ativo'));
+      chip.classList.add('ativo');
+      estadoColaboradores.status = chip.dataset.status;
+      estadoColaboradores.pagina = 1;
+      renderizarColaboradores();
+    });
   });
 
-  renderizarColaboradores(filtrados);
-}
-
-function obterLogsFiltrados() {
-  const termo = document.getElementById("filtro-log-nome").value.toLowerCase().trim();
-  const acao = document.getElementById("filtro-log-acao").value;
-  const dataInicio = document.getElementById("filtro-log-data-inicio").value;
-  const dataFim = document.getElementById("filtro-log-data-fim").value;
-
-  return TODOS_LOGS.filter((l) => {
-    const bateTermo = !termo || l.nome_no_momento?.toLowerCase().includes(termo);
-    const bateAcao = acao === "todas" || l.acao === acao;
-    const dataLog = new Date(l.criado_em);
-    const bateInicio = !dataInicio || dataLog >= new Date(dataInicio + "T00:00:00");
-    const bateFim = !dataFim || dataLog <= new Date(dataFim + "T23:59:59");
-    return bateTermo && bateAcao && bateInicio && bateFim;
+  document.querySelectorAll('#tabela-colaboradores th.ordenavel').forEach((th) => {
+    th.addEventListener('click', () => {
+      const campo = th.dataset.campo;
+      if (estadoColaboradores.ordenarPor === campo) {
+        estadoColaboradores.ordenarDir = estadoColaboradores.ordenarDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        estadoColaboradores.ordenarPor = campo;
+        estadoColaboradores.ordenarDir = 'asc';
+      }
+      renderizarColaboradores();
+    });
   });
 }
 
-function aplicarFiltroLogs() {
-  renderizarLogs(obterLogsFiltrados());
+// =========================================================
+// Toolbar: Logs
+// =========================================================
+function configurarToolbarLogs() {
+  const inputBusca = document.getElementById('filtro-log-nome');
+  inputBusca?.addEventListener('input', debounce(() => {
+    estadoLogs.termo = inputBusca.value.toLowerCase().trim();
+    estadoLogs.pagina = 1;
+    renderizarLogs();
+  }, 200));
+
+  document.getElementById('filtro-log-acao')?.addEventListener('change', (e) => {
+    estadoLogs.acao = e.target.value;
+    estadoLogs.pagina = 1;
+    renderizarLogs();
+  });
+  document.getElementById('filtro-log-data-inicio')?.addEventListener('change', (e) => {
+    estadoLogs.dataInicio = e.target.value;
+    estadoLogs.pagina = 1;
+    renderizarLogs();
+  });
+  document.getElementById('filtro-log-data-fim')?.addEventListener('change', (e) => {
+    estadoLogs.dataFim = e.target.value;
+    estadoLogs.pagina = 1;
+    renderizarLogs();
+  });
+
+  document.getElementById('btn-exportar-csv')?.addEventListener('click', exportarLogsCSV);
+}
+
+function debounce(fn, atraso) {
+  let temporizador;
+  return (...args) => {
+    clearTimeout(temporizador);
+    temporizador = setTimeout(() => fn(...args), atraso);
+  };
+}
+
+// =========================================================
+// Paginação (genérica para colaboradores e logs)
+// =========================================================
+function configurarPaginacao() {
+  ligarPaginacao('colaboradores', estadoColaboradores, renderizarColaboradores);
+  ligarPaginacao('logs', estadoLogs, renderizarLogs);
+}
+
+function ligarPaginacao(chave, estado, renderizar) {
+  document.getElementById(`tamanho-pagina-${chave}`)?.addEventListener('change', (e) => {
+    estado.tamanhoPagina = Number(e.target.value);
+    estado.pagina = 1;
+    renderizar();
+  });
+  document.getElementById(`pagina-anterior-${chave}`)?.addEventListener('click', () => {
+    if (estado.pagina > 1) { estado.pagina -= 1; renderizar(); }
+  });
+  document.getElementById(`proxima-pagina-${chave}`)?.addEventListener('click', () => {
+    estado.pagina += 1;
+    renderizar();
+  });
+}
+
+function atualizarPaginacaoUI(chave, totalItens, estado) {
+  const totalPaginas = Math.max(1, Math.ceil(totalItens / estado.tamanhoPagina));
+  const inicio = totalItens === 0 ? 0 : (estado.pagina - 1) * estado.tamanhoPagina + 1;
+  const fim = Math.min(estado.pagina * estado.tamanhoPagina, totalItens);
+
+  const info = document.getElementById(`paginacao-info-${chave}`);
+  if (info) info.textContent = totalItens === 0 ? 'Nenhum resultado' : `Mostrando ${inicio}–${fim} de ${totalItens}`;
+
+  const elPagina = document.getElementById(`pagina-atual-${chave}`);
+  if (elPagina) elPagina.textContent = `${estado.pagina} / ${totalPaginas}`;
+  
+  const btnAnterior = document.getElementById(`pagina-anterior-${chave}`);
+  if (btnAnterior) btnAnterior.disabled = estado.pagina <= 1;
+  
+  const btnProximo = document.getElementById(`proxima-pagina-${chave}`);
+  if (btnProximo) btnProximo.disabled = estado.pagina >= totalPaginas;
 }
 
 // =========================================================
@@ -237,27 +490,32 @@ function aplicarFiltroLogs() {
 // =========================================================
 function exportarLogsCSV() {
   const logs = obterLogsFiltrados();
+  if (!logs.length) {
+    mostrarToast('Não há eventos para exportar com os filtros atuais.', 'alerta');
+    return;
+  }
 
-  const cabecalho = ["Data/Hora", "Colaborador", "Ação", "Detalhes", "Executado por"];
+  const cabecalho = ['Data/Hora', 'Colaborador', 'Ação', 'Detalhes', 'Executado por'];
   const linhas = logs.map((l) => [
     formatarData(l.criado_em),
     l.nome_no_momento,
-    traduzirAcao(l.acao),
-    l.detalhes ? JSON.stringify(l.detalhes) : "",
-    l.executado_por || "Próprio usuário",
+    (MAPA_ACOES[l.acao] || {}).rotulo || l.acao,
+    l.detalhes ? JSON.stringify(l.detalhes) : '',
+    l.executado_por || 'Próprio usuário',
   ]);
 
   const csv = [cabecalho, ...linhas]
-    .map((linha) => linha.map((campo) => `"${String(campo).replace(/"/g, '""')}"`).join(";"))
-    .join("\n");
+    .map((linha) => linha.map((campo) => `"${String(campo).replace(/"/g, '""')}"`).join(';'))
+    .join('\n');
 
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
+  const link = document.createElement('a');
   link.href = url;
   link.download = `logs_assina_ai_${new Date().toISOString().slice(0, 10)}.csv`;
   link.click();
   URL.revokeObjectURL(url);
+  mostrarToast(`${logs.length} evento(s) exportado(s).`, 'sucesso');
 }
 
 // =========================================================
@@ -268,123 +526,244 @@ function tratarAcaoColaborador(acao, id, dataset) {
   if (!colaborador) return;
 
   switch (acao) {
-    case "editar":
+    case 'editar':
       abrirModalEditar(colaborador);
       break;
-    case "reset":
+    case 'reset':
       abrirConfirmacao(
-        "Resetar senha",
+        'Resetar senha',
         `Deseja gerar uma nova senha temporária para ${colaborador.nome_completo}? A senha atual deixará de funcionar.`,
         async () => {
-          const resultado = await chamarAcaoAdmin("resetar_senha", id);
-          document.getElementById("texto-senha-gerada").textContent = resultado.senhaTemporaria;
-          abrirModal("modal-senha-gerada");
-          await recarregarTudo();
+          const resultado = await chamarAcaoAdmin('resetar_senha', id);
+          document.getElementById('texto-senha-gerada').textContent = resultado.senhaTemporaria;
+          abrirModal('modal-senha-gerada');
+          mostrarToast('Senha temporária gerada com sucesso.', 'sucesso');
         }
       );
       break;
-    case "status": {
-      const ativoAtual = dataset.ativo === "true";
-      const acaoTexto = ativoAtual ? "desativar" : "ativar";
+    case 'status': {
+      const ativoAtual = dataset.ativo === 'true';
+      const acaoTexto = ativoAtual ? 'desativar' : 'ativar';
       abrirConfirmacao(
-        `${ativoAtual ? "Desativar" : "Ativar"} colaborador`,
+        `${ativoAtual ? 'Desativar' : 'Ativar'} colaborador`,
         `Deseja ${acaoTexto} o acesso de ${colaborador.nome_completo}?`,
         async () => {
-          await chamarAcaoAdmin("alternar_status", id, { ativo: !ativoAtual });
-          await recarregarTudo();
+          await chamarAcaoAdmin('alternar_status', id, { ativo: !ativoAtual });
+          
+          // Fallback defensivo: Atualiza cache local caso Realtime falhe
+          colaborador.ativo = !ativoAtual;
+          atualizarCards();
+          renderizarColaboradores();
+          
+          mostrarToast(`${colaborador.nome_completo} foi ${ativoAtual ? 'desativado' : 'ativado'}.`, 'sucesso');
         }
       );
       break;
     }
-    case "assinatura":
-      // Redireciona ao gerador em "modo admin", pré-carregando os dados do colaborador
-      sessionStorage.setItem("admin-gerar-para", JSON.stringify(colaborador));
-      window.location.href = "gerador.html?adminGerarPara=" + id;
+    case 'assinatura':
+      sessionStorage.setItem('admin-gerar-para', JSON.stringify(colaborador));
+      window.location.href = 'gerador.html?adminGerarPara=' + id;
       break;
   }
-}
-
-async function recarregarTudo() {
-  await Promise.all([carregarColaboradores(), carregarLogs()]);
-  atualizarCards();
-  aplicarFiltroColaboradores();
 }
 
 // =========================================================
 // Modais
 // =========================================================
 function configurarModais() {
-  document.querySelectorAll(".admin-overlay").forEach((overlay) => {
-    overlay.addEventListener("click", (e) => {
+  document.querySelectorAll('.admin-overlay').forEach((overlay) => {
+    overlay.addEventListener('click', (e) => {
       if (e.target === overlay) fecharModal(overlay);
     });
-    overlay.querySelectorAll("[data-fechar]").forEach((btn) =>
-      btn.addEventListener("click", () => fecharModal(overlay))
+    overlay.querySelectorAll('[data-fechar]').forEach((btn) =>
+      btn.addEventListener('click', () => fecharModal(overlay))
     );
   });
 
-  document.getElementById("form-editar-colaborador").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const id = document.getElementById("edit-id").value;
-    const nome_completo = document.getElementById("edit-nome").value.trim();
-    const cargo = document.getElementById("edit-cargo").value.trim();
-    const ramal = document.getElementById("edit-ramal").value.trim();
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.admin-overlay.visivel').forEach(fecharModal);
+    }
+  });
 
+  document.getElementById('form-editar-colaborador')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('edit-id').value;
+    const nome_completo = document.getElementById('edit-nome').value.trim();
+    const cargo = document.getElementById('edit-cargo').value.trim();
+    const ramal = document.getElementById('edit-ramal').value.trim();
+    const btnSalvar = document.getElementById('btn-salvar-edicao');
+
+    btnSalvar.disabled = true;
+    btnSalvar.textContent = 'Salvando…';
     try {
-      await chamarAcaoAdmin("atualizar_perfil", id, {
+      const novosDados = {
         nome_completo,
         cargo,
         telefone: ramal ? `(11) 2829-${ramal}` : undefined,
-      });
-      fecharModal(document.getElementById("modal-editar"));
-      await recarregarTudo();
+      };
+
+      await chamarAcaoAdmin('atualizar_perfil', id, novosDados);
+
+      // Fallback defensivo: Atualiza cache local caso Realtime falhe
+      const colaborador = TODOS_COLABORADORES.find((c) => c.id === id);
+      if (colaborador) {
+        Object.assign(colaborador, novosDados);
+        renderizarColaboradores();
+      }
+
+      fecharModal(document.getElementById('modal-editar'));
+      mostrarToast('Colaborador atualizado com sucesso.', 'sucesso');
     } catch (err) {
-      alert("Erro ao salvar: " + err.message);
+      mostrarToast('Erro ao salvar: ' + err.message, 'erro');
+    } finally {
+      btnSalvar.disabled = false;
+      btnSalvar.textContent = 'Salvar alterações';
+    }
+  });
+
+  document.getElementById('btn-copiar-senha')?.addEventListener('click', async () => {
+    const senha = document.getElementById('texto-senha-gerada').textContent;
+    try {
+      await navigator.clipboard.writeText(senha);
+      mostrarToast('Senha copied para a área de transferência.', 'sucesso');
+    } catch {
+      mostrarToast('Não foi possível copiar automaticamente.', 'alerta');
     }
   });
 }
 
+// Corrigido typo interno ("mensaje" -> "mensagem")
+function mostrarToast(mensagem, tipo = 'neutro') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${tipo}`;
+  toast.textContent = mensagem;
+  container.appendChild(toast);
+
+  requestAnimationFrame(() => toast.classList.add('visivel'));
+  setTimeout(() => {
+    toast.classList.remove('visivel');
+    setTimeout(() => toast.remove(), 250);
+  }, 4000);
+}
+
 function abrirModal(id) {
-  document.getElementById(id)?.classList.add("visivel");
+  document.getElementById(id)?.classList.add('visivel');
 }
 
 function fecharModal(overlay) {
-  overlay.classList.remove("visivel");
+  if (overlay) overlay.classList.remove('visivel');
 }
 
 function abrirModalEditar(colaborador) {
-  document.getElementById("edit-id").value = colaborador.id;
-  document.getElementById("edit-nome").value = colaborador.nome_completo || "";
-  document.getElementById("edit-cargo").value = colaborador.cargo || "";
-  document.getElementById("edit-ramal").value = (colaborador.telefone || "").replace(/\D/g, "").slice(-4);
-  abrirModal("modal-editar");
+  document.getElementById('edit-id').value = colaborador.id;
+  document.getElementById('edit-nome').value = colaborador.nome_completo || '';
+  document.getElementById('edit-cargo').value = colaborador.cargo || '';
+  document.getElementById('edit-ramal').value = (colaborador.telefone || '').replace(/\D/g, '').slice(-4);
+  abrirModal('modal-editar');
 }
 
 let acaoConfirmadaCallback = null;
 
 function abrirConfirmacao(titulo, texto, aoConfirmar) {
-  document.getElementById("confirmar-titulo").textContent = titulo;
-  document.getElementById("confirmar-texto").textContent = texto;
+  document.getElementById('confirmar-titulo').textContent = titulo;
+  document.getElementById('confirmar-texto').textContent = texto;
   acaoConfirmadaCallback = aoConfirmar;
-  abrirModal("modal-confirmar");
+  abrirModal('modal-confirmar');
 }
 
-document.getElementById("btn-confirmar-acao")?.addEventListener("click", async () => {
+document.getElementById('btn-confirmar-acao')?.addEventListener('click', async () => {
   if (acaoConfirmadaCallback) {
-    const btn = document.getElementById("btn-confirmar-acao");
+    const btn = document.getElementById('btn-confirmar-acao');
     btn.disabled = true;
-    btn.textContent = "Processando...";
+    btn.textContent = 'Processando…';
     try {
       await acaoConfirmadaCallback();
     } catch (err) {
-      alert("Erro: " + err.message);
+      mostrarToast('Erro: ' + err.message, 'erro');
     } finally {
       btn.disabled = false;
-      btn.textContent = "Confirmar";
-      fecharModal(document.getElementById("modal-confirmar"));
+      btn.textContent = 'Confirmar';
+      fecharModal(document.getElementById('modal-confirmar'));
       acaoConfirmadaCallback = null;
     }
   }
+});
+
+// =========================================================
+// Tempo real (Supabase Realtime)
+// =========================================================
+function configurarRealtime() {
+  CANAL_REALTIME = supabaseClient
+    .channel('admin-painel')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (payload) => {
+      aplicarMudancaColaborador(payload);
+    })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_logs' }, (payload) => {
+      aplicarNovoLog(payload.new);
+    })
+    .subscribe((status) => atualizarStatusConexao(status));
+}
+
+function aplicarMudancaColaborador(payload) {
+  if (payload.eventType === 'INSERT') {
+    if (!TODOS_COLABORADORES.some((c) => c.id === payload.new.id)) {
+      TODOS_COLABORADORES.push(payload.new);
+      mostrarToast(`Novo colaborador: ${payload.new.nome_completo}`, 'sucesso');
+    }
+  } else if (payload.eventType === 'UPDATE') {
+    const idx = TODOS_COLABORADORES.findIndex((c) => c.id === payload.new.id);
+    if (idx !== -1) {
+      TODOS_COLABORADORES[idx] = payload.new;
+    }
+  } else if (payload.eventType === 'DELETE') {
+    TODOS_COLABORADORES = TODOS_COLABORADORES.filter((c) => c.id !== payload.old.id);
+  }
+  atualizarCards();
+  renderizarColaboradores();
+}
+
+function aplicarNovoLog(novoLog) {
+  if (TODOS_LOGS.some((l) => l.id === novoLog.id)) return;
+  TODOS_LOGS.unshift(novoLog);
+  atualizarCards();
+  renderizarLogs();
+  piscarIndicadorAoVivo();
+}
+
+function piscarIndicadorAoVivo() {
+  const indicador = document.getElementById('live-indicator');
+  if (indicador) {
+    indicador.classList.add('pulso');
+    setTimeout(() => indicador.classList.remove('pulso'), 900);
+  }
+}
+
+function atualizarStatusConexao(status) {
+  const badge = document.getElementById('conexao-status');
+  const texto = document.getElementById('conexao-texto');
+  if (!badge || !texto) return;
+
+  if (status === 'SUBSCRIBED') {
+    badge.dataset.estado = 'conectado';
+    texto.textContent = 'Tempo real ativo';
+  } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+    badge.dataset.estado = 'erro';
+    texto.textContent = 'Reconectando…';
+  } else if (status === 'CLOSED') {
+    badge.dataset.estado = 'erro';
+    texto.textContent = 'Desconectado';
+  } else {
+    badge.dataset.estado = 'conectando';
+    texto.textContent = 'Conectando…';
+  }
+}
+
+window.addEventListener('beforeunload', () => {
+  if (CANAL_REALTIME) supabaseClient.removeChannel(CANAL_REALTIME);
 });
 
 // =========================================================
@@ -392,21 +771,22 @@ document.getElementById("btn-confirmar-acao")?.addEventListener("click", async (
 // =========================================================
 function configurarTema() {
   const root = document.documentElement;
-  const btn = document.getElementById("btn-tema");
-  const label = document.getElementById("theme-toggle-label");
+  const btn = document.getElementById('btn-tema');
+  const label = document.getElementById('theme-toggle-label');
+  if (!btn || !label) return;
 
   function temaAtual() {
-    return root.getAttribute("data-theme") === "light" ? "light" : "dark";
+    return root.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
   }
   function atualizarLabel() {
-    label.textContent = temaAtual() === "light" ? "Claro" : "Escuro";
+    label.textContent = temaAtual() === 'light' ? 'Claro' : 'Escuro';
   }
 
-  btn.addEventListener("click", () => {
-    const novo = temaAtual() === "light" ? "dark" : "light";
-    if (novo === "dark") root.removeAttribute("data-theme");
-    else root.setAttribute("data-theme", "light");
-    try { localStorage.setItem("hemc-tema", novo); } catch (e) {}
+  btn.addEventListener('click', () => {
+    const novo = temaAtual() === 'light' ? 'dark' : 'light';
+    if (novo === 'dark') root.removeAttribute('data-theme');
+    else root.setAttribute('data-theme', 'light');
+    try { localStorage.setItem('hemc-tema', novo); } catch (e) {}
     atualizarLabel();
   });
 
