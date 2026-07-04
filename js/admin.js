@@ -8,8 +8,12 @@ let TODOS_LOGS = [];
 let ADMIN_ATUAL = null;
 let CANAL_REALTIME = null;
 
+let DEPARTAMENTOS = [];
+let DEPARTAMENTOS_POR_ID = {};
+
 const estadoColaboradores = {
   status: 'todos',
+  departamentoId: 'todos',
   termo: '',
   ordenarPor: 'nome_completo',
   ordenarDir: 'asc',
@@ -35,6 +39,7 @@ const MAPA_ACOES = {
   ativado: { rotulo: 'Ativação', tom: 'sucesso', icone: '✓' },
   desativado: { rotulo: 'Desativação', tom: 'erro', icone: '×' },
   primeiro_acesso_concluido: { rotulo: '1º acesso concluído', tom: 'sucesso', icone: '✓' },
+  cargo_nao_localizado: { rotulo: 'Cargo não localizado', tom: 'alerta', icone: '!' },
 };
 
 // Rótulos amigáveis para os campos que aparecem nos diffs de log (nome_completo, cargo, telefone, ...)
@@ -43,6 +48,8 @@ const MAPA_CAMPOS = {
   cargo: 'Cargo',
   telefone: 'Ramal/Telefone',
   ativo: 'Status',
+  departamento_id: 'Departamento',
+  re: 'RE',
 };
 
 // =========================================================
@@ -64,12 +71,74 @@ const MAPA_CAMPOS = {
   configurarModais();
   configurarTema();
 
+  await carregarDepartamentos();
   await carregarTudo();
   configurarRealtime();
 })();
 
 document.getElementById('btn-logout')?.addEventListener('click', fazerLogout);
 document.getElementById('erro-banner-retry')?.addEventListener('click', carregarTudo);
+
+// =========================================================
+// Departamentos
+// =========================================================
+async function carregarDepartamentos() {
+  try {
+    DEPARTAMENTOS = await buscarDepartamentos();
+    DEPARTAMENTOS_POR_ID = Object.fromEntries(DEPARTAMENTOS.map((d) => [d.id, d.nome]));
+    popularFiltroDepartamentos();
+    popularSelectDepartamentoEdicao();
+  } catch (erro) {
+    console.error('Erro ao carregar departamentos:', erro);
+    mostrarToast('Não foi possível carregar a lista de departamentos.', 'alerta');
+  }
+}
+
+async function buscarDepartamentos() {
+  const { data, error } = await supabaseClient
+    .from('departamentos')
+    .select('id, nome')
+    .order('nome', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+function popularFiltroDepartamentos() {
+  const select = document.getElementById('filtro-departamento');
+  if (!select) return;
+  // Mantém a opção "Todos" e recria as demais, para suportar recarregamento.
+  select.querySelectorAll('option:not([value="todos"])').forEach((op) => op.remove());
+  DEPARTAMENTOS.forEach((d) => {
+    const opt = document.createElement('option');
+    opt.value = d.id;
+    opt.textContent = d.nome;
+    select.appendChild(opt);
+  });
+}
+
+function popularSelectDepartamentoEdicao() {
+  const select = document.getElementById('edit-departamento');
+  if (!select) return;
+  select.querySelectorAll('option:not([value=""])').forEach((op) => op.remove());
+  DEPARTAMENTOS.forEach((d) => {
+    const opt = document.createElement('option');
+    opt.value = d.id;
+    opt.textContent = d.nome;
+    select.appendChild(opt);
+  });
+}
+
+function nomeDepartamento(id) {
+  if (!id) return null;
+  return DEPARTAMENTOS_POR_ID[id] || null;
+}
+
+// Enriquece um colaborador vindo do backend com o nome do departamento
+// (resolvido localmente a partir do departamento_id), já que a Edge Function
+// pode retornar apenas o id.
+function enriquecerColaborador(c) {
+  return { ...c, departamento_nome: nomeDepartamento(c.departamento_id) };
+}
 
 // =========================================================
 // Carregamento de dados
@@ -93,7 +162,10 @@ async function buscarColaboradores() {
   // Modificado: Agora busca através da Edge Function para contornar restrições estritas de RLS.
   // Solicitamos um limite alto para manter os filtros reativos locais rodando perfeitamente em memória.
   const resposta = await chamarAcaoAdmin('listar_colaboradores', null, { pagina: 1, limite: 5000 });
-  return resposta?.colaboradores || [];
+  const colaboradores = resposta?.colaboradores || [];
+  // IMPORTANTE: a Edge Function "listar_colaboradores" precisa retornar
+  // "departamento_id" e "re" de profiles para que estes campos funcionem.
+  return colaboradores.map(enriquecerColaborador);
 }
 
 async function buscarLogs() {
@@ -147,16 +219,20 @@ function ocultarErro() {
 function obterColaboradoresFiltrados() {
   const termo = estadoColaboradores.termo;
   const status = estadoColaboradores.status;
+  const departamentoId = estadoColaboradores.departamentoId;
 
   let lista = TODOS_COLABORADORES.filter((c) => {
     const bateTermo = !termo ||
       c.nome_completo?.toLowerCase().includes(termo) ||
-      c.email?.toLowerCase().includes(termo);
+      c.email?.toLowerCase().includes(termo) ||
+      String(c.re ?? '').includes(termo);
     const bateStatus =
       status === 'todos' ||
       (status === 'ativo' && c.ativo) ||
-      (status === 'inactive' && !c.ativo);
-    return bateTermo && bateStatus;
+      (status === 'inativo' && !c.ativo);
+    const bateDepartamento =
+      departamentoId === 'todos' || c.departamento_id === departamentoId;
+    return bateTermo && bateStatus && bateDepartamento;
   });
 
   const { ordenarPor, ordenarDir } = estadoColaboradores;
@@ -170,6 +246,7 @@ function obterColaboradoresFiltrados() {
 
     if (ordenarPor === 'ativo') { va = va ? 1 : 0; vb = vb ? 1 : 0; }
     if (ordenarPor === 'ultimo_login') { va = va ? new Date(va).getTime() : 0; vb = vb ? new Date(vb).getTime() : 0; }
+    if (ordenarPor === 're') { va = va === '' ? -Infinity : Number(va); vb = vb === '' ? -Infinity : Number(vb); }
 
     if (typeof va === 'string') va = va.toLowerCase();
     if (typeof vb === 'string') vb = vb.toLowerCase();
@@ -197,7 +274,7 @@ function renderizarColaboradores() {
     `${lista.length} colaborador${lista.length === 1 ? '' : 'es'}`;
 
   if (!pagina.length) {
-    corpo.innerHTML = `<tr><td colspan="7" class="admin-tabela-vazia">
+    corpo.innerHTML = `<tr><td colspan="9" class="admin-tabela-vazia">
       ${lista.length === 0 && TODOS_COLABORADORES.length > 0
         ? 'Nenhum colaborador corresponde aos filtros aplicados.'
         : 'Nenhum colaborador cadastrado ainda.'}
@@ -212,6 +289,8 @@ function renderizarColaboradores() {
           </div>
         </td>
         <td class="admin-cel-muted">${escapeHtml(c.email || '—')}</td>
+        <td>${c.departamento_nome ? escapeHtml(c.departamento_nome) : '<span class="admin-cel-muted">Não definido</span>'}</td>
+        <td class="admin-cel-mono">${c.re ?? '<span class="admin-cel-muted">—</span>'}</td>
         <td>${escapeHtml(c.cargo || '—')}</td>
         <td><span class="admin-badge ${c.ativo ? 'admin-badge-ativo' : 'admin-badge-inativo'}"><i></i>${c.ativo ? 'Ativo' : 'Inativo'}</span></td>
         <td>${c.primeiro_acesso ? '<span class="admin-badge admin-badge-pendente"><i></i>Pendente</span>' : '<span class="admin-cel-muted">Concluído</span>'}</td>
@@ -335,8 +414,9 @@ function renderizarLogs() {
 // Gera o resumo visual do evento (chips de informação + bloco de alterações),
 // exibido direto na timeline, sem precisar abrir o modal de detalhes.
 //
-// Para o evento de "login": sempre mostra Nome / Cargo / Ramal com que o
-// colaborador efetivamente entrou, em formato de chips.
+// Para o evento de "login": sempre mostra Nome / Cargo / Departamento / RE / Ramal
+// com que o colaborador efetivamente entrou, em formato de chips — mantendo o
+// registro fiel ao dado empresarial vigente no momento do acesso.
 // Quando há alterações (login com dado diferente do último acesso, edição
 // de perfil pelo admin, ativação/desativação): mostra um bloco destacado
 // "Alterações", com "De" riscado e "Para" em destaque.
@@ -350,6 +430,8 @@ function resumoDetalhesLog(log) {
     const pares = [];
     if (detalhes.nome_completo) pares.push({ rotulo: 'Nome', valor: detalhes.nome_completo });
     if (detalhes.cargo) pares.push({ rotulo: 'Cargo', valor: detalhes.cargo });
+    if (detalhes.departamento) pares.push({ rotulo: 'Departamento', valor: detalhes.departamento });
+    if (detalhes.re) pares.push({ rotulo: 'RE', valor: detalhes.re, mono: true });
     if (detalhes.ramal) pares.push({ rotulo: 'Ramal', valor: detalhes.ramal, mono: true });
     if (pares.length) blocos.push(construirChipsInfo(pares));
   }
@@ -365,7 +447,7 @@ function resumoDetalhesLog(log) {
 }
 
 // Monta um conjunto de "chips" (rótulo + valor), lado a lado, com quebra de
-// linha automática — usado para exibir Nome/Cargo/Ramal do login.
+// linha automática — usado para exibir Nome/Cargo/Departamento/RE/Ramal do login.
 function construirChipsInfo(pares) {
   const chips = pares.map(({ rotulo, valor, mono }) => `
     <span class="admin-log-chip">
@@ -588,6 +670,12 @@ function configurarToolbarColaboradores() {
     });
   });
 
+  document.getElementById('filtro-departamento')?.addEventListener('change', (e) => {
+    estadoColaboradores.departamentoId = e.target.value;
+    estadoColaboradores.pagina = 1;
+    renderizarColaboradores();
+  });
+
   document.querySelectorAll('#tabela-colaboradores th.ordenavel').forEach((th) => {
     th.addEventListener('click', () => {
       const campo = th.dataset.campo;
@@ -797,13 +885,17 @@ function configurarModais() {
     const nome_completo = document.getElementById('edit-nome').value.trim();
     const cargo = document.getElementById('edit-cargo').value.trim();
     const ramal = document.getElementById('edit-ramal').value.trim();
+    const departamentoId = document.getElementById('edit-departamento').value || null;
+    const reValorBruto = document.getElementById('edit-re').value.trim();
+    const re = reValorBruto ? Number(reValorBruto) : null;
     const btnSalvar = document.getElementById('btn-salvar-edicao');
 
     btnSalvar.disabled = true;
     btnSalvar.textContent = 'Salvando…';
     try {
       // Guarda o estado ANTES da edição — é essa comparação que faltava para o
-      // log mostrar exatamente o que mudou (nome antigo → novo, cargo antigo → novo etc).
+      // log mostrar exatamente o que mudou (nome antigo → novo, cargo antigo → novo,
+      // departamento antigo → novo, RE antigo → novo, etc).
       const colaboradorAntes = TODOS_COLABORADORES.find((c) => c.id === id);
       const telefoneNovo = ramal ? `(11) 2829-${ramal}` : undefined;
 
@@ -811,8 +903,12 @@ function configurarModais() {
         nome_completo,
         cargo,
         telefone: telefoneNovo,
+        departamento_id: departamentoId,
+        re,
       };
 
+      // IMPORTANTE: a Edge Function "atualizar_perfil" precisa aceitar e persistir
+      // "departamento_id" e "re" em profiles para que a gravação funcione de fato.
       await chamarAcaoAdmin('atualizar_perfil', id, novosDados);
 
       // Monta o diff (somente os campos que de fato mudaram de valor)
@@ -827,11 +923,21 @@ function configurarModais() {
         if (telefoneNovo !== undefined && (colaboradorAntes.telefone || '') !== telefoneNovo) {
           alteracoes.telefone = { de: colaboradorAntes.telefone || null, para: telefoneNovo };
         }
+        if ((colaboradorAntes.departamento_id || null) !== (departamentoId || null)) {
+          alteracoes.departamento_id = {
+            de: nomeDepartamento(colaboradorAntes.departamento_id) || 'Sem departamento',
+            para: nomeDepartamento(departamentoId) || 'Sem departamento',
+          };
+        }
+        const reAntes = colaboradorAntes.re ?? null;
+        if (reAntes !== re) {
+          alteracoes.re = { de: reAntes ?? '—', para: re ?? '—' };
+        }
       }
 
       // Log explícito e detalhado, gravado diretamente pelo front-end — garante que
-      // nome e cargo sempre apareçam no log, independentemente do que a Edge Function
-      // "atualizar_perfil" registra (ou deixa de registrar) por conta própria.
+      // nome, cargo, departamento e RE sempre apareçam no log, independentemente do
+      // que a Edge Function "atualizar_perfil" registra (ou deixa de registrar) por conta própria.
       await registrarLogDetalhado({
         usuarioId: id,
         nomeNoMomento: nome_completo,
@@ -842,6 +948,7 @@ function configurarModais() {
       // Fallback defensivo: Atualiza cache local caso Realtime falhe
       if (colaboradorAntes) {
         Object.assign(colaboradorAntes, novosDados);
+        colaboradorAntes.departamento_nome = nomeDepartamento(colaboradorAntes.departamento_id);
         renderizarColaboradores();
       }
 
@@ -937,6 +1044,8 @@ function fecharModal(overlay) {
 function abrirModalEditar(colaborador) {
   document.getElementById('edit-id').value = colaborador.id;
   document.getElementById('edit-nome').value = colaborador.nome_completo || '';
+  document.getElementById('edit-departamento').value = colaborador.departamento_id || '';
+  document.getElementById('edit-re').value = colaborador.re ?? '';
   document.getElementById('edit-cargo').value = colaborador.cargo || '';
   document.getElementById('edit-ramal').value = (colaborador.telefone || '').replace(/\D/g, '').slice(-4);
   abrirModal('modal-editar');
@@ -987,13 +1096,13 @@ function configurarRealtime() {
 function aplicarMudancaColaborador(payload) {
   if (payload.eventType === 'INSERT') {
     if (!TODOS_COLABORADORES.some((c) => c.id === payload.new.id)) {
-      TODOS_COLABORADORES.push(payload.new);
+      TODOS_COLABORADORES.push(enriquecerColaborador(payload.new));
       mostrarToast(`Novo colaborador: ${payload.new.nome_completo}`, 'sucesso');
     }
   } else if (payload.eventType === 'UPDATE') {
     const idx = TODOS_COLABORADORES.findIndex((c) => c.id === payload.new.id);
     if (idx !== -1) {
-      TODOS_COLABORADORES[idx] = payload.new;
+      TODOS_COLABORADORES[idx] = enriquecerColaborador(payload.new);
     }
   } else if (payload.eventType === 'DELETE') {
     TODOS_COLABORADORES = TODOS_COLABORADORES.filter((c) => c.id !== payload.old.id);

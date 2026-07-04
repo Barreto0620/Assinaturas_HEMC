@@ -128,6 +128,9 @@
   background: var(--assina-surface); color: var(--assina-text); font-size: 13px;
 }
 
+/* Select de departamento no toolbar de colaboradores — mesma altura/estilo dos demais selects */
+#filtro-departamento { min-width: 180px; }
+
 .admin-chips { display: inline-flex; gap: 6px; padding: 3px; background: var(--assina-bg-1); border-radius: 999px; border: 1px solid var(--assina-border); }
 .admin-chip {
   border: none; background: none; padding: 6px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
@@ -307,11 +310,15 @@
 .admin-modal-texto { font-size: 13px; color: var(--assina-text-muted); line-height: 1.55; margin-bottom: 18px; }
 .admin-modal form { display: flex; flex-direction: column; gap: 14px; }
 .admin-modal .campo label { font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block; color: var(--assina-text-muted); }
-.admin-modal .campo input {
+.admin-modal .campo input,
+.admin-modal .campo select {
   width: 100%; padding: 10px 12px; border-radius: 8px;
   border: 1px solid var(--assina-border); background: var(--assina-bg-1); color: var(--assina-text); font-size: 13.5px;
+  font-family: inherit;
 }
-.admin-modal .campo input:focus { outline: none; border-color: var(--assina-blue-500); }
+.admin-modal .campo select { appearance: auto; }
+.admin-modal .campo input:focus,
+.admin-modal .campo select:focus { outline: none; border-color: var(--assina-blue-500); }
 .admin-modal-acoes { display: flex; gap: 10px; margin-top: 8px; }
 .admin-modal-acoes .btn, .admin-modal-acoes button { flex: 1; }
 
@@ -347,6 +354,7 @@
 @media (max-width: 720px) {
   .admin-toolbar { flex-direction: column; align-items: stretch; }
   .admin-busca { max-width: none; }
+  #filtro-departamento { min-width: 0; width: 100%; }
   .admin-contagem { margin-left: 0; }
   .admin-paginacao { flex-direction: column; align-items: flex-start; }
 }
