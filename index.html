@@ -8,8 +8,15 @@
   <link rel="icon" type="image/x-icon" href="img/favicon.ico">
 
   <script>
-    // Sincronizador Atômico de Tema: impede a cintilação (flash) visual ao carregar a página
+    // Roteador Inteligente de Ambiente & Sincronizador Atômico de Tema
     (function () {
+      // 1. Intercepta o subdomínio administrativo e redireciona instantaneamente
+      if (window.location.hostname === 'painel-hemc-assina.vercel.app' && (window.location.pathname === '/' || window.location.pathname === '/index.html')) {
+        window.location.href = '/login-admin.html';
+        return; 
+      }
+
+      // 2. Sincronizador de Tema original (impede o flash visual)
       try {
         var temaSalvo = localStorage.getItem('hemc-tema');
         if (temaSalvo === 'light' || temaSalvo === 'dark') {
@@ -36,7 +43,7 @@
     .mensagem-erro, .mensagem-sucesso { order: 7; }
 
     /* =========================================================
-       🖼️ Logo institucional — canto superior esquerdo
+       Protetor Logo institucional — canto superior esquerdo
        ========================================================= */
     .logo-institucional {
       position: fixed;
@@ -62,7 +69,7 @@
     }
 
     /* =========================================================
-       🔐 Modal de Redefinição de Senha (Primeiro Acesso)
+       Modal de Redefinição de Senha (Primeiro Acesso)
        ========================================================= */
     .modal-overlay {
       position: fixed;
@@ -136,14 +143,14 @@
 
 <body>
 
-  <!-- 🖼️ Logo Institucional -->
+  <!-- Logo Institucional -->
   <div class="logo-institucional">
     <img src="img/logo_assina.png" alt="Logo Hospital Estadual Mário Covas">
   </div>
 
   <div class="login-wrapper">
 
-    <!-- 🌓 Alternador de Tema Sincronizado -->
+    <!-- Alternador de Tema Sincronizado -->
     <button type="button" class="login-theme-toggle" id="btn-tema-login" aria-label="Alternar tema claro/escuro">
       <svg id="sun-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="5"></circle>
@@ -214,7 +221,7 @@
       </form>
     </div>
 
-    <!-- 🚀 Floating Developer Portfolio Badge -->
+    <!-- Floating Developer Portfolio Badge -->
     <a href="https://github.com/Barreto0620" target="_blank" rel="noopener noreferrer" class="developer-badge" title="Ver portfólio no GitHub">
       <div class="avatar-icon">
         <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
@@ -228,11 +235,7 @@
     </a>
   </div>
 
-  <!-- =========================================================
-       🔐 Modal: Redefinição Obrigatória de Senha (Primeiro Acesso)
-       Exibido automaticamente após login quando o perfil ainda
-       não passou pela troca de senha inicial.
-       ========================================================= -->
+  <!-- Modal: Redefinição Obrigatória de Senha (Primeiro Acesso) -->
   <div class="modal-overlay" id="modal-redefinir-senha-overlay">
     <div class="modal-redefinir-senha">
       <h2>Defina sua nova senha</h2>
