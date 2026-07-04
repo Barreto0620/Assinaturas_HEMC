@@ -1,0 +1,15 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "painel-hemc-assina.vercel.app"
+        }
+      ],
+      "destination": "/login-admin.html"
+    }
+  ]
+}
