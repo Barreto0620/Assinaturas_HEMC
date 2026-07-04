@@ -12,6 +12,15 @@ const DOMINIO_INSTITUCIONAL = "@hemc.fuabc.org.br";
 const PREFIXO_RAMAL = "(11) 2829-";
 const REDIRECT_URL = "gerador.html";
 
+// Guarda o resultado da última verificação de nome contra a base de
+// referência (colaboradores_referencia). Só permite login se nomeConferido
+// bater com o nome atualmente digitado E encontrado for true.
+let estadoVerificacaoNome = {
+  nomeConferido: null,
+  encontrado: false,
+  cargoOficial: null,
+};
+
 const els = {
   form: document.getElementById("form-auth"),
   btnSubmit: document.getElementById("btn-submit"),
@@ -86,6 +95,43 @@ function fecharModalRedefinicao() {
 }
 
 // =========================================================
+// 1.1 UI da verificação de nome / cargo institucional
+// =========================================================
+
+function setStatusVerificandoNome() {
+  if (!els.cargo) return;
+  els.cargo.value = "";
+  els.cargo.readOnly = true;
+  els.cargo.placeholder = "Verificando nome institucional...";
+  els.cargo.classList.remove("campo-validado", "campo-nao-localizado");
+}
+
+function setCargoValidado(cargoOficial) {
+  if (!els.cargo) return;
+  els.cargo.value = cargoOficial;
+  els.cargo.readOnly = true;
+  els.cargo.classList.remove("campo-nao-localizado");
+  els.cargo.classList.add("campo-validado");
+}
+
+function setNomeNaoLocalizado() {
+  if (!els.cargo) return;
+  els.cargo.value = "";
+  els.cargo.readOnly = true;
+  els.cargo.placeholder = "Nome não localizado na base institucional";
+  els.cargo.classList.remove("campo-validado");
+  els.cargo.classList.add("campo-nao-localizado");
+}
+
+function resetarStatusCargo() {
+  if (!els.cargo) return;
+  els.cargo.value = "";
+  els.cargo.readOnly = true;
+  els.cargo.placeholder = "Ex: Analista de TI";
+  els.cargo.classList.remove("campo-validado", "campo-nao-localizado");
+}
+
+// =========================================================
 // 2. Log estruturado (facilita debug em produção)
 // =========================================================
 
@@ -130,6 +176,59 @@ async function atualizarUltimoLogin(usuarioId) {
 }
 
 // =========================================================
+// 2.2 Verificação de nome contra a base de referência
+// (colaboradores_referencia via RPC buscar_cargo_por_nome)
+// Preenche e trava o campo cargo automaticamente, impossibilitando
+// o colaborador de inserir um cargo fictício.
+// =========================================================
+
+let timeoutVerificacaoNome = null;
+
+async function verificarNomeInstitucional(nomeDigitado) {
+  const nome = (nomeDigitado || "").trim();
+
+  if (nome.length < 3) {
+    resetarStatusCargo();
+    estadoVerificacaoNome = { nomeConferido: null, encontrado: false, cargoOficial: null };
+    return;
+  }
+
+  setStatusVerificandoNome();
+
+  try {
+    const { data, error } = await supabaseClient.rpc("buscar_cargo_por_nome", { p_nome: nome });
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      estadoVerificacaoNome = { nomeConferido: nome, encontrado: true, cargoOficial: data[0].cargo };
+      setCargoValidado(data[0].cargo);
+      log("verificarNomeInstitucional:encontrado", { nome, cargo: data[0].cargo });
+    } else {
+      estadoVerificacaoNome = { nomeConferido: nome, encontrado: false, cargoOficial: null };
+      setNomeNaoLocalizado();
+      log("verificarNomeInstitucional:naoEncontrado", { nome });
+    }
+  } catch (erro) {
+    logErro("verificarNomeInstitucional", erro);
+    // Falha de rede/RPC não deve travar o usuário indefinidamente,
+    // mas também não libera o cargo: pede para tentar novamente.
+    estadoVerificacaoNome = { nomeConferido: null, encontrado: false, cargoOficial: null };
+    if (els.cargo) {
+      els.cargo.value = "";
+      els.cargo.placeholder = "Não foi possível verificar. Saia e volte ao campo Nome.";
+      els.cargo.classList.remove("campo-validado");
+      els.cargo.classList.add("campo-nao-localizado");
+    }
+  }
+}
+
+function agendarVerificacaoNome(nomeDigitado) {
+  clearTimeout(timeoutVerificacaoNome);
+  timeoutVerificacaoNome = setTimeout(() => verificarNomeInstitucional(nomeDigitado), 400);
+}
+
+// =========================================================
 // 3. Coleta e validação dos dados do formulário
 // =========================================================
 
@@ -161,6 +260,14 @@ function validarDados({ emailPrefixo, cargo, ramal, senha, nomeCompleto }) {
   if (!nomeCompleto || nomeCompleto.length < 3) {
     return "Por favor, insira o seu nome completo.";
   }
+
+  // Bloqueia o login se o nome não bateu com a base institucional.
+  // Como toda credencial é gerada a partir de quem já está na planilha,
+  // um "não encontrado" aqui é, na prática, erro de digitação do nome.
+  if (estadoVerificacaoNome.nomeConferido !== nomeCompleto || !estadoVerificacaoNome.encontrado) {
+    return "Não foi possível confirmar seu nome na base institucional. Verifique a grafia exata do seu nome completo (conforme cadastro no RH) e tente novamente.";
+  }
+
   if (!cargo) {
     return "Por favor, informe o seu Cargo institucional.";
   }
@@ -508,6 +615,13 @@ async function verificarSessaoExistente() {
 // =========================================================
 // 11. Inicialização
 // =========================================================
+
+resetarStatusCargo();
+
+if (els.nome) {
+  els.nome.addEventListener("input", (e) => agendarVerificacaoNome(e.target.value));
+  els.nome.addEventListener("blur", (e) => verificarNomeInstitucional(e.target.value));
+}
 
 if (els.form) {
   els.form.addEventListener("submit", processarLogin);

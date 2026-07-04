@@ -69,6 +69,23 @@
     }
 
     /* =========================================================
+       Status de verificação do Cargo institucional (automático)
+       ========================================================= */
+    #cargo {
+      transition: border-color 0.2s ease, background-color 0.2s ease;
+      cursor: not-allowed;
+    }
+    #cargo.campo-validado {
+      border-color: #2e7d4f;
+      background: rgba(46, 125, 79, 0.08);
+      cursor: default;
+    }
+    #cargo.campo-nao-localizado {
+      border-color: #c0392b;
+      background: rgba(192, 57, 43, 0.08);
+    }
+
+    /* =========================================================
        Modal de Redefinição de Senha (Primeiro Acesso)
        ========================================================= */
     .modal-overlay {
@@ -195,7 +212,7 @@
 
         <div class="campo campo-cargo">
           <label for="cargo">Cargo</label>
-          <input id="cargo" type="text" required placeholder="Ex: Analista de TI">
+          <input id="cargo" type="text" required readonly placeholder="Ex: Analista de TI">
         </div>
 
         <div class="campo campo-ramal">
