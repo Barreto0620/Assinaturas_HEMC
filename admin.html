@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Painel Administrativo | Assina.ai HEMC</title>
   <link rel="icon" type="image/x-icon" href="img/favicon.ico">
-  
+
   <script>
     (function () {
       try {
@@ -14,7 +14,7 @@
       } catch (e) {}
     })();
   </script>
-  
+
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/admin.css">
 </head>
@@ -45,22 +45,26 @@
       </div>
     </div>
 
-   
+
 
     <div class="admin-cards" id="admin-cards">
-      <div class="admin-card">
+      <div class="admin-card admin-card-clicavel admin-card-selecionado" id="card-filtro-total" data-status="todos" role="button" tabindex="0">
         <span class="admin-card-label">Total de Colaboradores</span>
         <span class="admin-card-valor skeleton-valor" id="card-total">—</span>
       </div>
-      <div class="admin-card admin-card-ativo">
+      <div class="admin-card admin-card-ativo admin-card-clicavel" id="card-filtro-ativo" data-status="ativo" role="button" tabindex="0">
         <span class="admin-card-label">Ativos</span>
         <span class="admin-card-valor skeleton-valor" id="card-ativos">—</span>
       </div>
-      <div class="admin-card admin-card-inativo">
+      <div class="admin-card admin-card-inativo admin-card-clicavel" id="card-filtro-inativo" data-status="inativo" role="button" tabindex="0">
         <span class="admin-card-label">Inativos</span>
         <span class="admin-card-valor skeleton-valor" id="card-inativos">—</span>
       </div>
-      <div class="admin-card">
+      <div class="admin-card admin-card-clicavel" id="card-filtro-pendente" data-status="pendente" role="button" tabindex="0">
+        <span class="admin-card-label">Pendentes (1º acesso)</span>
+        <span class="admin-card-valor skeleton-valor" id="card-nunca-acessaram">—</span>
+      </div>
+      <div class="admin-card admin-card-clicavel" id="card-ir-atividades-24h" role="button" tabindex="0">
         <span class="admin-card-label">Ações nas últimas 24h</span>
         <span class="admin-card-valor skeleton-valor" id="card-atividade-24h">—</span>
       </div>
@@ -83,11 +87,7 @@
         <select id="filtro-departamento" class="admin-select" aria-label="Filtrar por departamento">
           <option value="todos">Todos os departamentos</option>
         </select>
-        <div class="admin-chips" id="filtro-status-chips" role="group" aria-label="Filtrar por status">
-          <button class="admin-chip ativo" data-status="todos" type="button">Todos</button>
-          <button class="admin-chip" data-status="ativo" type="button">Ativos</button>
-          <button class="admin-chip" data-status="inativo" type="button">Inativos</button>
-        </div>
+        <button id="btn-emails-pendentes" class="btn btn-secundario" type="button">📋 E-mails pendentes</button>
         <span class="admin-contagem" id="contagem-colaboradores"></span>
       </div>
 
@@ -96,20 +96,19 @@
           <thead>
             <tr>
               <th class="ordenavel" data-campo="nome_completo">Nome</th>
-              <th>E-mail</th>
+              <th class="ordenavel" data-campo="email">E-mail</th>
               <th class="ordenavel" data-campo="departamento_nome">Departamento</th>
               <th class="ordenavel" data-campo="re">RE</th>
               <th>Cargo</th>
               <th class="ordenavel" data-campo="ativo">Status</th>
-              <th>1º Acesso</th>
               <th class="ordenavel" data-campo="ultimo_login">Último Login</th>
               <th class="admin-th-acoes">Ações</th>
             </tr>
           </thead>
           <tbody id="corpo-tabela-colaboradores">
-            <tr class="admin-skeleton-row"><td colspan="9"><div class="skeleton-linha"></div></td></tr>
-            <tr class="admin-skeleton-row"><td colspan="9"><div class="skeleton-linha"></div></td></tr>
-            <tr class="admin-skeleton-row"><td colspan="9"><div class="skeleton-linha"></div></td></tr>
+            <tr class="admin-skeleton-row"><td colspan="8"><div class="skeleton-linha"></div></td></tr>
+            <tr class="admin-skeleton-row"><td colspan="8"><div class="skeleton-linha"></div></td></tr>
+            <tr class="admin-skeleton-row"><td colspan="8"><div class="skeleton-linha"></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -155,6 +154,9 @@
         </select>
         <input type="date" id="filtro-log-data-inicio" class="admin-select" aria-label="Data inicial">
         <input type="date" id="filtro-log-data-fim" class="admin-select" aria-label="Data final">
+        <span class="admin-badge-filtro-24h" id="badge-filtro-24h" hidden>
+          Últimas 24h <button type="button" id="btn-limpar-filtro-24h" aria-label="Remover filtro de 24h">×</button>
+        </span>
         <span class="live-badge" id="live-indicator"><span class="live-dot"></span>Ao vivo</span>
         <button id="btn-exportar-csv" class="btn btn-secundario">Exportar CSV</button>
       </div>
@@ -252,6 +254,30 @@
       </div>
       <div class="admin-modal-acoes">
         <button class="btn" data-fechar>Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="admin-overlay" id="modal-emails-pendentes">
+    <div class="admin-modal">
+      <div class="admin-modal-header">
+        <h3 id="emails-pendentes-titulo">E-mails aguardando 1º acesso</h3>
+        <button class="admin-modal-fechar" data-fechar aria-label="Fechar">&times;</button>
+      </div>
+      <div class="admin-pendentes-toolbar">
+        <div class="admin-busca" style="flex:1;">
+          <svg class="admin-busca-icone" width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="7" cy="7" r="5.25" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M11 11L14.5 14.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <input type="text" id="busca-emails-pendentes" placeholder="Buscar por e-mail ou nome…">
+        </div>
+        <button class="btn btn-secundario" id="btn-copiar-emails-pendentes" type="button">Copiar todos</button>
+        <button class="btn btn-secundario" id="btn-exportar-emails-pendentes" type="button">Exportar CSV</button>
+      </div>
+      <div class="admin-pendentes-lista" id="emails-pendentes-lista"></div>
+      <div class="admin-modal-acoes">
+        <button class="btn btn-secundario" data-fechar>Fechar</button>
       </div>
     </div>
   </div>

@@ -26,6 +26,7 @@ const estadoLogs = {
   acao: 'todas',
   dataInicio: '',
   dataFim: '',
+  somenteUltimas24h: false,
   pagina: 1,
   tamanhoPagina: 10,
 };
@@ -64,6 +65,7 @@ const MAPA_CAMPOS = {
     sessaoInfo.profile?.nome_completo || sessaoInfo.user.email;
 
   configurarTabs();
+  configurarCardsFiltro();
   injetarEstilosTimelineLogs();
   configurarToolbarColaboradores();
   configurarToolbarLogs();
@@ -159,12 +161,13 @@ async function carregarTudo() {
 }
 
 async function buscarColaboradores() {
-  // Modificado: Agora busca através da Edge Function para contornar restrições estritas de RLS.
-  // Solicitamos um limite alto para manter os filtros reativos locais rodando perfeitamente em memória.
+  // Busca através da Edge Function ("listar_colaboradores"), que cruza o
+  // Supabase Auth (fonte de verdade de quem já tem e-mail cadastrado) com a
+  // tabela "profiles" (dados preenchidos no 1º acesso). Isso garante que
+  // TODO e-mail já criado no Auth apareça na lista — inclusive quem ainda
+  // nunca fez login — e não só quem já tem um perfil montado.
   const resposta = await chamarAcaoAdmin('listar_colaboradores', null, { pagina: 1, limite: 5000 });
   const colaboradores = resposta?.colaboradores || [];
-  // IMPORTANTE: a Edge Function "listar_colaboradores" precisa retornar
-  // "departamento_id" e "re" de profiles para que estes campos funcionem.
   return colaboradores.map(enriquecerColaborador);
 }
 
@@ -180,8 +183,9 @@ async function buscarLogs() {
 
 function atualizarCards() {
   const total = TODOS_COLABORADORES.length;
-  const ativos = TODOS_COLABORADORES.filter((c) => c.ativo).length;
-  const inativos = total - ativos;
+  const ativos = TODOS_COLABORADORES.filter((c) => calcularStatus(c) === 'ativo').length;
+  const pendentes = TODOS_COLABORADORES.filter((c) => calcularStatus(c) === 'pendente').length;
+  const inativos = TODOS_COLABORADORES.filter((c) => calcularStatus(c) === 'inativo').length;
 
   const ha24h = Date.now() - 24 * 60 * 60 * 1000;
   const atividade24h = TODOS_LOGS.filter((l) => new Date(l.criado_em).getTime() >= ha24h).length;
@@ -190,6 +194,12 @@ function atualizarCards() {
   setValorCard('card-ativos', ativos);
   setValorCard('card-inativos', inativos);
   setValorCard('card-atividade-24h', atividade24h);
+
+  const cardPendentes = document.getElementById('card-nunca-acessaram');
+  if (cardPendentes) {
+    cardPendentes.textContent = pendentes;
+    cardPendentes.classList.remove('skeleton-valor');
+  }
 }
 
 function setValorCard(id, valor) {
@@ -214,6 +224,30 @@ function ocultarErro() {
 }
 
 // =========================================================
+// Status unificado do colaborador
+// =========================================================
+// Três estados, sem ambiguidade:
+// - "inativo": conta desabilitada pelo admin (prevalece sobre tudo)
+// - "pendente": habilitada, mas nunca fez login (aguardando 1º acesso)
+// - "ativo": habilitada e já fez pelo menos um login
+function calcularStatus(c) {
+  if (!c.ativo) return 'inativo';
+  if (!c.ultimo_login) return 'pendente';
+  return 'ativo';
+}
+
+const META_STATUS = {
+  ativo: { rotulo: 'Ativo', classe: 'admin-badge-ativo' },
+  pendente: { rotulo: 'Pendente', classe: 'admin-badge-pendente' },
+  inativo: { rotulo: 'Inativo', classe: 'admin-badge-inativo' },
+};
+
+function renderizarBadgeStatus(c) {
+  const meta = META_STATUS[calcularStatus(c)];
+  return `<span class="admin-badge ${meta.classe}"><i></i>${meta.rotulo}</span>`;
+}
+
+// =========================================================
 // Colaboradores: filtro + ordenação + paginação
 // =========================================================
 function obterColaboradoresFiltrados() {
@@ -228,8 +262,7 @@ function obterColaboradoresFiltrados() {
       String(c.re ?? '').includes(termo);
     const bateStatus =
       status === 'todos' ||
-      (status === 'ativo' && c.ativo) ||
-      (status === 'inativo' && !c.ativo);
+      status === calcularStatus(c);
     const bateDepartamento =
       departamentoId === 'todos' || c.departamento_id === departamentoId;
     return bateTermo && bateStatus && bateDepartamento;
@@ -244,7 +277,11 @@ function obterColaboradoresFiltrados() {
     if (va === null || va === undefined) va = '';
     if (vb === null || vb === undefined) vb = '';
 
-    if (ordenarPor === 'ativo') { va = va ? 1 : 0; vb = vb ? 1 : 0; }
+    if (ordenarPor === 'ativo') {
+      const ordem = { inativo: 0, pendente: 1, ativo: 2 };
+      va = ordem[calcularStatus(a)];
+      vb = ordem[calcularStatus(b)];
+    }
     if (ordenarPor === 'ultimo_login') { va = va ? new Date(va).getTime() : 0; vb = vb ? new Date(vb).getTime() : 0; }
     if (ordenarPor === 're') { va = va === '' ? -Infinity : Number(va); vb = vb === '' ? -Infinity : Number(vb); }
 
@@ -274,7 +311,7 @@ function renderizarColaboradores() {
     `${lista.length} colaborador${lista.length === 1 ? '' : 'es'}`;
 
   if (!pagina.length) {
-    corpo.innerHTML = `<tr><td colspan="9" class="admin-tabela-vazia">
+    corpo.innerHTML = `<tr><td colspan="8" class="admin-tabela-vazia">
       ${lista.length === 0 && TODOS_COLABORADORES.length > 0
         ? 'Nenhum colaborador corresponde aos filtros aplicados.'
         : 'Nenhum colaborador cadastrado ainda.'}
@@ -285,21 +322,20 @@ function renderizarColaboradores() {
         <td>
           <div class="admin-pessoa">
             <span class="admin-avatar">${iniciais(c.nome_completo)}</span>
-            <span>${escapeHtml(c.nome_completo)}</span>
+            <span>${c.nome_completo ? escapeHtml(c.nome_completo) : '<span class="admin-cel-muted">Aguardando 1º acesso</span>'}</span>
           </div>
         </td>
-        <td class="admin-cel-muted">${escapeHtml(c.email || '—')}</td>
+        <td class="admin-cel-muted admin-cel-mono">${c.email ? escapeHtml(c.email) : '—'}</td>
         <td>${c.departamento_nome ? escapeHtml(c.departamento_nome) : '<span class="admin-cel-muted">Não definido</span>'}</td>
         <td class="admin-cel-mono">${c.re ?? '<span class="admin-cel-muted">—</span>'}</td>
         <td>${escapeHtml(c.cargo || '—')}</td>
-        <td><span class="admin-badge ${c.ativo ? 'admin-badge-ativo' : 'admin-badge-inativo'}"><i></i>${c.ativo ? 'Ativo' : 'Inativo'}</span></td>
-        <td>${c.primeiro_acesso ? '<span class="admin-badge admin-badge-pendente"><i></i>Pendente</span>' : '<span class="admin-cel-muted">Concluído</span>'}</td>
+        <td>${renderizarBadgeStatus(c)}</td>
         <td class="admin-cel-mono">${c.ultimo_login ? formatarData(c.ultimo_login) : '<span class="admin-cel-muted">Nunca acessou</span>'}</td>
         <td class="admin-tabela-acoes">
-          <button class="admin-icon-btn" data-acao="editar" data-id="${c.id}" title="Editar" aria-label="Editar ${escapeHtml(c.nome_completo)}">✎</button>
-          <button class="admin-icon-btn" data-acao="reset" data-id="${c.id}" title="Resetar senha" aria-label="Resetar senha de ${escapeHtml(c.nome_completo)}">⟳</button>
-          <button class="admin-icon-btn" data-acao="assinatura" data-id="${c.id}" title="Gerar assinatura" aria-label="Gerar assinatura para ${escapeHtml(c.nome_completo)}">✒</button>
-          <button class="admin-icon-btn ${c.ativo ? 'admin-icon-btn-perigo' : 'admin-icon-btn-sucesso'}" data-acao="status" data-id="${c.id}" data-ativo="${c.ativo}" title="${c.ativo ? 'Desativar' : 'Ativar'}" aria-label="${c.ativo ? 'Desativar' : 'Ativar'} ${escapeHtml(c.nome_completo)}">
+          <button class="admin-icon-btn" data-acao="editar" data-id="${c.id}" title="Editar" aria-label="Editar ${escapeHtml(c.nome_completo || c.email || '')}">✎</button>
+          <button class="admin-icon-btn" data-acao="reset" data-id="${c.id}" title="Resetar senha" aria-label="Resetar senha de ${escapeHtml(c.nome_completo || c.email || '')}">⟳</button>
+          <button class="admin-icon-btn" data-acao="assinatura" data-id="${c.id}" title="Gerar assinatura" aria-label="Gerar assinatura para ${escapeHtml(c.nome_completo || c.email || '')}">✒</button>
+          <button class="admin-icon-btn ${c.ativo ? 'admin-icon-btn-perigo' : 'admin-icon-btn-sucesso'}" data-acao="status" data-id="${c.id}" data-ativo="${c.ativo}" title="${c.ativo ? 'Desativar' : 'Ativar'}" aria-label="${c.ativo ? 'Desativar' : 'Ativar'} ${escapeHtml(c.nome_completo || c.email || '')}">
             ${c.ativo ? '⏻' : '✓'}
           </button>
         </td>
@@ -336,11 +372,17 @@ function iniciais(nome) {
 // Logs: filtro + timeline + paginação
 // =========================================================
 function obterLogsFiltrados() {
-  const { termo, acao, dataInicio, dataFim } = estadoLogs;
+  const { termo, acao, dataInicio, dataFim, somenteUltimas24h } = estadoLogs;
   return TODOS_LOGS.filter((l) => {
     const bateTermo = !termo || l.nome_no_momento?.toLowerCase().includes(termo);
     const bateAcao = acao === 'todas' || l.acao === acao;
     const dataLog = new Date(l.criado_em);
+
+    if (somenteUltimas24h) {
+      const ha24h = Date.now() - 24 * 60 * 60 * 1000;
+      return bateTermo && bateAcao && dataLog.getTime() >= ha24h;
+    }
+
     const bateInicio = !dataInicio || dataLog >= new Date(dataInicio + 'T00:00:00');
     const bateFim = !dataFim || dataLog <= new Date(dataFim + 'T23:59:59');
     return bateTermo && bateAcao && bateInicio && bateFim;
@@ -413,13 +455,6 @@ function renderizarLogs() {
 
 // Gera o resumo visual do evento (chips de informação + bloco de alterações),
 // exibido direto na timeline, sem precisar abrir o modal de detalhes.
-//
-// Para o evento de "login": sempre mostra Nome / Cargo / Departamento / RE / Ramal
-// com que o colaborador efetivamente entrou, em formato de chips — mantendo o
-// registro fiel ao dado empresarial vigente no momento do acesso.
-// Quando há alterações (login com dado diferente do último acesso, edição
-// de perfil pelo admin, ativação/desativação): mostra um bloco destacado
-// "Alterações", com "De" riscado e "Para" em destaque.
 function resumoDetalhesLog(log) {
   const detalhes = log?.detalhes;
   if (!detalhes || typeof detalhes !== 'object') return '';
@@ -446,8 +481,6 @@ function resumoDetalhesLog(log) {
   return blocos.join('');
 }
 
-// Monta um conjunto de "chips" (rótulo + valor), lado a lado, com quebra de
-// linha automática — usado para exibir Nome/Cargo/Departamento/RE/Ramal do login.
 function construirChipsInfo(pares) {
   const chips = pares.map(({ rotulo, valor, mono }) => `
     <span class="admin-log-chip">
@@ -457,8 +490,6 @@ function construirChipsInfo(pares) {
   return `<div class="admin-log-chips">${chips}</div>`;
 }
 
-// Monta o bloco destacado de alterações a partir de um diff
-// { campo: { de, para } }, com "De" riscado e "Para" em destaque.
 function construirBlocoDiff(alteracoes) {
   if (!alteracoes || typeof alteracoes !== 'object' || !Object.keys(alteracoes).length) return '';
 
@@ -483,9 +514,7 @@ function construirBlocoDiff(alteracoes) {
 }
 
 // =========================================================
-// Estilos da timeline de logs (chips + bloco de diff)
-// Injetados dinamicamente para não depender de editar admin.css —
-// respeitam o tema claro/escuro já usado no restante do painel.
+// Estilos da timeline de logs (chips + bloco de diff) + badge "nunca acessou"
 // =========================================================
 function injetarEstilosTimelineLogs() {
   if (document.getElementById('admin-log-estilos-dinamicos')) return;
@@ -587,6 +616,12 @@ function injetarEstilosTimelineLogs() {
       font-style: italic;
     }
 
+    .admin-badge-nunca-acessou {
+      background: rgba(255, 99, 99, 0.12);
+      color: #ff6b6b;
+      border: 1px solid rgba(255, 99, 99, 0.28);
+    }
+
     [data-theme="light"] .admin-log-chip {
       background: rgba(39, 68, 127, 0.06);
       border-color: rgba(39, 68, 127, 0.16);
@@ -594,6 +629,107 @@ function injetarEstilosTimelineLogs() {
 
     [data-theme="light"] .admin-log-diff-bloco {
       background: rgba(214, 154, 31, 0.14);
+    }
+
+    [data-theme="light"] .admin-badge-nunca-acessou {
+      background: rgba(220, 38, 38, 0.08);
+      color: #dc2626;
+      border-color: rgba(220, 38, 38, 0.22);
+    }
+
+    /* Correção da linha divisória horizontal entre as linhas da tabela:
+       força a borda a existir de forma consistente em TODAS as células
+       (inclusive a coluna de Ações), com a mesma largura/cor, evitando o
+       efeito de "degrau" onde a borda parece parar antes dos ícones. */
+    #tabela-colaboradores {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    #tabela-colaboradores tbody tr td {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      box-sizing: border-box;
+    }
+    [data-theme="light"] #tabela-colaboradores tbody tr td {
+      border-bottom-color: rgba(0, 0, 0, 0.07);
+    }
+    .admin-tabela-wrap {
+      overflow-x: auto;
+    }
+
+    /* Correção de alinhamento da coluna de Ações: os botões ficam num grupo
+       flex com espaçamento fixo, ancorados à direita da célula — elimina o
+       desalinhamento entre a linha divisória da coluna e os ícones. */
+    .admin-tabela-acoes {
+      display: flex !important;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .admin-tabela-acoes .admin-icon-btn {
+      flex: 0 0 auto;
+      width: 30px;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+    th.admin-th-acoes {
+      text-align: right;
+    }
+
+    /* Lista de e-mails pendentes */
+    .admin-pendentes-toolbar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .admin-pendentes-lista {
+      max-height: 420px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .admin-pendente-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .admin-pendente-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .admin-pendente-email {
+      font-family: 'SFMono-Regular', Consolas, Menlo, monospace;
+      font-size: 13px;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .admin-pendente-nome {
+      font-size: 12px;
+      opacity: 0.75;
+    }
+    .admin-pendente-data {
+      font-size: 11.5px;
+      opacity: 0.55;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    [data-theme="light"] .admin-pendente-item {
+      border-color: rgba(0, 0, 0, 0.08);
+      background: rgba(0, 0, 0, 0.02);
     }
   `;
   document.head.appendChild(estilo);
@@ -650,6 +786,76 @@ function configurarTabs() {
 }
 
 // =========================================================
+// Cards como filtro (substituem os antigos chips de status)
+// =========================================================
+// Os 4 primeiros cards (Total/Ativos/Inativos/Pendentes) funcionam como um
+// grupo de seleção única — clicar aplica o filtro na tabela de Colaboradores
+// e destaca visualmente o card ativo. O card de "Ações nas últimas 24h" tem
+// outro papel: leva direto para a aba Atividades já filtrada nesse período.
+function configurarCardsFiltro() {
+  const cardsDeStatus = [
+    { id: 'card-filtro-total', status: 'todos' },
+    { id: 'card-filtro-ativo', status: 'ativo' },
+    { id: 'card-filtro-inativo', status: 'inativo' },
+    { id: 'card-filtro-pendente', status: 'pendente' },
+  ];
+
+  cardsDeStatus.forEach(({ id, status }) => {
+    const card = document.getElementById(id);
+    if (!card) return;
+    card.addEventListener('click', () => selecionarCardStatus(status));
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        selecionarCardStatus(status);
+      }
+    });
+  });
+
+  const cardAtividades = document.getElementById('card-ir-atividades-24h');
+  cardAtividades?.addEventListener('click', irParaAtividades24h);
+  cardAtividades?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      irParaAtividades24h();
+    }
+  });
+}
+
+function selecionarCardStatus(status) {
+  estadoColaboradores.status = status;
+  estadoColaboradores.pagina = 1;
+
+  document.querySelectorAll('.admin-card-clicavel[data-status]').forEach((card) => {
+    card.classList.toggle('admin-card-selecionado', card.dataset.status === status);
+  });
+
+  renderizarColaboradores();
+}
+
+function irParaAtividades24h() {
+  // Ativa a aba Atividades (reaproveita o mesmo comportamento dos botões de tab)
+  document.querySelectorAll('.admin-tab').forEach((t) => t.classList.remove('ativo'));
+  document.querySelectorAll('.admin-tab-content').forEach((c) => c.classList.remove('ativo'));
+  document.querySelector('.admin-tab[data-tab="tab-logs"]')?.classList.add('ativo');
+  document.getElementById('tab-logs')?.classList.add('ativo');
+
+  // Filtro exato das últimas 24h (janela contínua, não por dia de calendário).
+  // Limpa os campos de data manual, já que os dois filtros são mutuamente exclusivos.
+  estadoLogs.somenteUltimas24h = true;
+  estadoLogs.dataInicio = '';
+  estadoLogs.dataFim = '';
+  estadoLogs.pagina = 1;
+
+  const inputInicio = document.getElementById('filtro-log-data-inicio');
+  const inputFim = document.getElementById('filtro-log-data-fim');
+  if (inputInicio) inputInicio.value = '';
+  if (inputFim) inputFim.value = '';
+
+  renderizarLogs();
+}
+
+// =========================================================
 // Toolbar: Colaboradores
 // =========================================================
 function configurarToolbarColaboradores() {
@@ -660,21 +866,13 @@ function configurarToolbarColaboradores() {
     renderizarColaboradores();
   }, 200));
 
-  document.querySelectorAll('#filtro-status-chips .admin-chip').forEach((chip) => {
-    chip.addEventListener('click', () => {
-      document.querySelectorAll('#filtro-status-chips .admin-chip').forEach((c) => c.classList.remove('ativo'));
-      chip.classList.add('ativo');
-      estadoColaboradores.status = chip.dataset.status;
-      estadoColaboradores.pagina = 1;
-      renderizarColaboradores();
-    });
-  });
-
   document.getElementById('filtro-departamento')?.addEventListener('change', (e) => {
     estadoColaboradores.departamentoId = e.target.value;
     estadoColaboradores.pagina = 1;
     renderizarColaboradores();
   });
+
+  document.getElementById('btn-emails-pendentes')?.addEventListener('click', abrirModalEmailsPendentes);
 
   document.querySelectorAll('#tabela-colaboradores th.ordenavel').forEach((th) => {
     th.addEventListener('click', () => {
@@ -708,11 +906,13 @@ function configurarToolbarLogs() {
   });
   document.getElementById('filtro-log-data-inicio')?.addEventListener('change', (e) => {
     estadoLogs.dataInicio = e.target.value;
+    estadoLogs.somenteUltimas24h = false;
     estadoLogs.pagina = 1;
     renderizarLogs();
   });
   document.getElementById('filtro-log-data-fim')?.addEventListener('change', (e) => {
     estadoLogs.dataFim = e.target.value;
+    estadoLogs.somenteUltimas24h = false;
     estadoLogs.pagina = 1;
     renderizarLogs();
   });
@@ -816,7 +1016,7 @@ function tratarAcaoColaborador(acao, id, dataset) {
     case 'reset':
       abrirConfirmacao(
         'Resetar senha',
-        `Deseja gerar uma nova senha temporária para ${colaborador.nome_completo}? A senha atual deixará de funcionar.`,
+        `Deseja gerar uma nova senha temporária para ${colaborador.nome_completo || colaborador.email}? A senha atual deixará de funcionar.`,
         async () => {
           const resultado = await chamarAcaoAdmin('resetar_senha', id);
           document.getElementById('texto-senha-gerada').textContent = resultado.senhaTemporaria;
@@ -830,15 +1030,13 @@ function tratarAcaoColaborador(acao, id, dataset) {
       const acaoTexto = ativoAtual ? 'desativar' : 'ativar';
       abrirConfirmacao(
         `${ativoAtual ? 'Desativar' : 'Ativar'} colaborador`,
-        `Deseja ${acaoTexto} o acesso de ${colaborador.nome_completo}?`,
+        `Deseja ${acaoTexto} o acesso de ${colaborador.nome_completo || colaborador.email}?`,
         async () => {
           await chamarAcaoAdmin('alternar_status', id, { ativo: !ativoAtual });
 
-          // Log explícito de status, com o antes/depois, seguindo o mesmo padrão do
-          // log de edição de perfil — não depende apenas da Edge Function registrar.
           await registrarLogDetalhado({
             usuarioId: id,
-            nomeNoMomento: colaborador.nome_completo,
+            nomeNoMomento: colaborador.nome_completo || colaborador.email,
             acao: !ativoAtual ? 'ativado' : 'desativado',
             alteracoes: { ativo: { de: ativoAtual, para: !ativoAtual } },
           });
@@ -848,7 +1046,7 @@ function tratarAcaoColaborador(acao, id, dataset) {
           atualizarCards();
           renderizarColaboradores();
 
-          mostrarToast(`${colaborador.nome_completo} foi ${ativoAtual ? 'desativado' : 'ativado'}.`, 'sucesso');
+          mostrarToast(`${colaborador.nome_completo || colaborador.email} foi ${ativoAtual ? 'desativado' : 'ativado'}.`, 'sucesso');
         }
       );
       break;
@@ -861,9 +1059,120 @@ function tratarAcaoColaborador(acao, id, dataset) {
 }
 
 // =========================================================
+// Lista dedicada: e-mails aguardando 1º acesso
+// =========================================================
+// Visão focada e profissional, separada da tabela principal, feita
+// especificamente para responder "quais e-mails ainda faltam entrar
+// pela primeira vez". Usa a mesma fonte de verdade do badge (ultimo_login
+// nulo), então está sempre consistente com o que aparece na tabela.
+function obterColaboradoresPendentes() {
+  return TODOS_COLABORADORES
+    .filter((c) => calcularStatus(c) === 'pendente')
+    .slice()
+    .sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+}
+
+function abrirModalEmailsPendentes() {
+  renderizarListaEmailsPendentes();
+  abrirModal('modal-emails-pendentes');
+}
+
+function renderizarListaEmailsPendentes(termo = '') {
+  const pendentes = obterColaboradoresPendentes();
+  const termoBusca = termo.toLowerCase().trim();
+
+  const filtrados = termoBusca
+    ? pendentes.filter((c) =>
+        c.email?.toLowerCase().includes(termoBusca) ||
+        c.nome_completo?.toLowerCase().includes(termoBusca))
+    : pendentes;
+
+  const titulo = document.getElementById('emails-pendentes-titulo');
+  if (titulo) {
+    titulo.textContent = `${pendentes.length} e-mail${pendentes.length === 1 ? '' : 's'} aguardando 1º acesso`;
+  }
+
+  const lista = document.getElementById('emails-pendentes-lista');
+  if (!lista) return;
+
+  if (!filtrados.length) {
+    lista.innerHTML = `<div class="admin-tabela-vazia">
+      ${pendentes.length === 0
+        ? 'Nenhum e-mail pendente — todos os colaboradores já acessaram o sistema.'
+        : 'Nenhum e-mail corresponde à busca.'}
+    </div>`;
+    return;
+  }
+
+  lista.innerHTML = filtrados.map((c) => `
+    <div class="admin-pendente-item">
+      <div class="admin-pendente-info">
+        <span class="admin-pendente-email">${escapeHtml(c.email || 'Sem e-mail no Auth')}</span>
+        ${c.nome_completo ? `<span class="admin-pendente-nome">${escapeHtml(c.nome_completo)}</span>` : '<span class="admin-pendente-nome admin-cel-muted">Perfil ainda não preenchido</span>'}
+      </div>
+      <span class="admin-pendente-data">Criado em ${formatarDataCurta(c.criado_em_auth)}</span>
+    </div>
+  `).join('');
+}
+
+function formatarDataCurta(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('pt-BR');
+}
+
+async function copiarEmailsPendentes() {
+  const emails = obterColaboradoresPendentes().map((c) => c.email).filter(Boolean);
+  if (!emails.length) {
+    mostrarToast('Não há e-mails pendentes para copiar.', 'alerta');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(emails.join('\n'));
+    mostrarToast(`${emails.length} e-mail(s) copiado(s) para a área de transferência.`, 'sucesso');
+  } catch {
+    mostrarToast('Não foi possível copiar automaticamente.', 'alerta');
+  }
+}
+
+function exportarEmailsPendentesCSV() {
+  const pendentes = obterColaboradoresPendentes();
+  if (!pendentes.length) {
+    mostrarToast('Não há e-mails pendentes para exportar.', 'alerta');
+    return;
+  }
+
+  const cabecalho = ['E-mail', 'Nome', 'Departamento', 'Criado em (Auth)'];
+  const linhas = pendentes.map((c) => [
+    c.email || '',
+    c.nome_completo || '',
+    c.departamento_nome || '',
+    c.criado_em_auth ? formatarData(c.criado_em_auth) : '',
+  ]);
+
+  const csv = [cabecalho, ...linhas]
+    .map((linha) => linha.map((campo) => `"${String(campo).replace(/"/g, '""')}"`).join(';'))
+    .join('\n');
+
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `emails_pendentes_assina_ai_${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+  mostrarToast(`${pendentes.length} e-mail(s) exportado(s).`, 'sucesso');
+}
+
+// =========================================================
 // Modais
 // =========================================================
 function configurarModais() {
+  document.getElementById('busca-emails-pendentes')?.addEventListener('input', debounce((e) => {
+    renderizarListaEmailsPendentes(e.target.value);
+  }, 150));
+  document.getElementById('btn-copiar-emails-pendentes')?.addEventListener('click', copiarEmailsPendentes);
+  document.getElementById('btn-exportar-emails-pendentes')?.addEventListener('click', exportarEmailsPendentesCSV);
+
   document.querySelectorAll('.admin-overlay').forEach((overlay) => {
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) fecharModal(overlay);
@@ -893,9 +1202,6 @@ function configurarModais() {
     btnSalvar.disabled = true;
     btnSalvar.textContent = 'Salvando…';
     try {
-      // Guarda o estado ANTES da edição — é essa comparação que faltava para o
-      // log mostrar exatamente o que mudou (nome antigo → novo, cargo antigo → novo,
-      // departamento antigo → novo, RE antigo → novo, etc).
       const colaboradorAntes = TODOS_COLABORADORES.find((c) => c.id === id);
       const telefoneNovo = ramal ? `(11) 2829-${ramal}` : undefined;
 
@@ -907,11 +1213,8 @@ function configurarModais() {
         re,
       };
 
-      // IMPORTANTE: a Edge Function "atualizar_perfil" precisa aceitar e persistir
-      // "departamento_id" e "re" em profiles para que a gravação funcione de fato.
       await chamarAcaoAdmin('atualizar_perfil', id, novosDados);
 
-      // Monta o diff (somente os campos que de fato mudaram de valor)
       const alteracoes = {};
       if (colaboradorAntes) {
         if ((colaboradorAntes.nome_completo || '') !== nome_completo) {
@@ -935,9 +1238,6 @@ function configurarModais() {
         }
       }
 
-      // Log explícito e detalhado, gravado diretamente pelo front-end — garante que
-      // nome, cargo, departamento e RE sempre apareçam no log, independentemente do
-      // que a Edge Function "atualizar_perfil" registra (ou deixa de registrar) por conta própria.
       await registrarLogDetalhado({
         usuarioId: id,
         nomeNoMomento: nome_completo,
@@ -945,10 +1245,10 @@ function configurarModais() {
         alteracoes,
       });
 
-      // Fallback defensivo: Atualiza cache local caso Realtime falhe
       if (colaboradorAntes) {
         Object.assign(colaboradorAntes, novosDados);
         colaboradorAntes.departamento_nome = nomeDepartamento(colaboradorAntes.departamento_id);
+        colaboradorAntes.possui_perfil = true;
         renderizarColaboradores();
       }
 
@@ -976,11 +1276,6 @@ function configurarModais() {
 // =========================================================
 // Log detalhado — gravação direta em activity_logs
 // =========================================================
-// Centraliza a criação de eventos de log a partir do painel admin, sempre com um
-// diff explícito (de/para) quando houver alterações. Insere direto na tabela e
-// injeta o registro na timeline na hora (aplicarNovoLog), sem esperar o Realtime.
-// Se não houver nenhum campo alterado, ainda assim registra o evento (com uma
-// observação), para não mascarar ações que não resultaram em mudança real.
 async function registrarLogDetalhado({ usuarioId, nomeNoMomento, acao, alteracoes }) {
   try {
     const { data: { session } } = await supabaseClient.auth.getSession();
@@ -1009,14 +1304,11 @@ async function registrarLogDetalhado({ usuarioId, nomeNoMomento, acao, alteracoe
       aplicarNovoLog(logInserido);
     }
   } catch (erroLog) {
-    // Não interrompe o fluxo principal (a ação em si já foi concluída) — apenas
-    // avisa no console e via toast, para não deixar o problema passar despercebido.
     console.error('Erro ao registrar log detalhado:', erroLog);
     mostrarToast('A ação foi concluída, mas houve falha ao registrar o log.', 'alerta');
   }
 }
 
-// Corrigido typo interno ("mensaje" -> "mensagem")
 function mostrarToast(mensagem, tipo = 'neutro') {
   const container = document.getElementById('toast-container');
   if (!container) return;
@@ -1095,17 +1387,29 @@ function configurarRealtime() {
 
 function aplicarMudancaColaborador(payload) {
   if (payload.eventType === 'INSERT') {
-    if (!TODOS_COLABORADORES.some((c) => c.id === payload.new.id)) {
-      TODOS_COLABORADORES.push(enriquecerColaborador(payload.new));
+    const existente = TODOS_COLABORADORES.find((c) => c.id === payload.new.id);
+    if (existente) {
+      // Já existia na lista (vindo do Auth, sem perfil ainda) — agora ganhou perfil.
+      Object.assign(existente, payload.new, { possui_perfil: true });
+      existente.departamento_nome = nomeDepartamento(existente.departamento_id);
+      mostrarToast(`${payload.new.nome_completo} concluiu o 1º acesso.`, 'sucesso');
+    } else {
+      TODOS_COLABORADORES.push(enriquecerColaborador({ ...payload.new, possui_perfil: true }));
       mostrarToast(`Novo colaborador: ${payload.new.nome_completo}`, 'sucesso');
     }
   } else if (payload.eventType === 'UPDATE') {
     const idx = TODOS_COLABORADORES.findIndex((c) => c.id === payload.new.id);
     if (idx !== -1) {
-      TODOS_COLABORADORES[idx] = enriquecerColaborador(payload.new);
+      TODOS_COLABORADORES[idx] = enriquecerColaborador({ ...payload.new, possui_perfil: true });
     }
   } else if (payload.eventType === 'DELETE') {
-    TODOS_COLABORADORES = TODOS_COLABORADORES.filter((c) => c.id !== payload.old.id);
+    // O perfil foi apagado, mas o usuário pode continuar existindo no Auth —
+    // não removemos da lista, só marcamos que ficou sem perfil novamente.
+    const existente = TODOS_COLABORADORES.find((c) => c.id === payload.old.id);
+    if (existente) {
+      existente.possui_perfil = false;
+      existente.primeiro_acesso = true;
+    }
   }
   atualizarCards();
   renderizarColaboradores();
