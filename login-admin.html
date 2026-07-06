@@ -33,7 +33,7 @@
     .mensagem-erro, .mensagem-sucesso { order: 4; }
 
     /* =========================================================
-       🖼️ Logo institucional — canto superior esquerdo
+       Logo institucional — canto superior esquerdo
        ========================================================= */
     .logo-institucional {
       position: fixed;
@@ -92,17 +92,20 @@
       <form id="form-auth">
 
         <div class="campo campo-email">
-          <label for="email">E-mail corporativo</label>
-          <input id="email" type="email" required placeholder="admin@hemc.fuabc.org.br" style="width: 100%; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--assina-border); background: var(--assina-surface); color: var(--assina-text);">
+          <label for="email">E-mail institucional</label>
+          <div class="email-field-group">
+            <input id="email" class="email-input" type="text" required placeholder="nome.sobrenome" autocomplete="username">
+            <span class="email-suffix">@hemc.fuabc.org.br</span>
+          </div>
         </div>
 
         <div class="campo campo-senha">
           <label for="senha">Senha</label>
-          <input id="senha" type="password" required placeholder="••••••••" style="width: 100%; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--assina-border); background: var(--assina-surface); color: var(--assina-text); margin-top: 8px;">
+          <input id="senha" type="password" required placeholder="••••••••" autocomplete="current-password">
         </div>
 
         <div class="acoes">
-          <button type="submit" id="btn-submit" class="btn" style="width: 100%;">Acessar Painel</button>
+          <button type="submit" id="btn-submit" class="btn">Acessar Painel</button>
         </div>
 
         <div id="msg-erro" class="mensagem-erro"></div>
@@ -148,35 +151,50 @@
 
       btnTema.addEventListener('click', () => {
         const novoTema = obterTemaAtual() === 'light' ? 'dark' : 'light';
-        
+
         if (novoTema === 'dark') {
           root.removeAttribute('data-theme');
         } else {
           root.setAttribute('data-theme', 'light');
         }
-        
-        try { localStorage.setItem('hemc-tema', novoTema); } catch(e) {}
+
+        try { localStorage.setItem('hemc-tema', novoTema); } catch (e) {}
         atualizarIconesVisuais(novoTema);
       });
 
       // Inicializa exibição correta dos ícones baseados no antiflash script
       atualizarIconesVisuais(obterTemaAtual());
+
+      // -------------------------------------------------------------
+      // 🔒 Máscara de entrada do campo de e-mail (mesmo padrão do
+      // index.html): apenas minúsculas e caracteres válidos de e-mail,
+      // já que o domínio institucional é fixo e não digitável.
+      // -------------------------------------------------------------
+      const inputEmail = document.getElementById("email");
+      if (inputEmail) {
+        inputEmail.addEventListener("input", (e) => {
+          e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9\.\-\_]/g, "");
+        });
+      }
     });
   </script>
 
   <script type="module">
     import { supabaseClient } from './js/supabaseClient.js'; // Confirme se o caminho para o cliente Supabase está correto
 
+    const DOMINIO_INSTITUCIONAL = "@hemc.fuabc.org.br";
+
     const formAuth = document.getElementById('form-auth');
     const btnSubmit = document.getElementById('btn-submit');
     const msgErro = document.getElementById('msg-erro');
+    const inputEmail = document.getElementById('email');
 
     formAuth.addEventListener('submit', async (e) => {
       e.preventDefault();
-      
-      const email = document.getElementById('email').value.trim();
+
+      const emailPrefixo = inputEmail.value.trim();
       const senha = document.getElementById('senha').value;
-      
+
       // Limpa erros anteriores e mostra estado de carregamento
       msgErro.classList.remove('visivel');
       msgErro.textContent = '';
@@ -184,6 +202,12 @@
       btnSubmit.disabled = true;
 
       try {
+        if (!emailPrefixo) {
+          throw new Error('Por favor, insira o seu e-mail institucional.');
+        }
+
+        const email = `${emailPrefixo}${DOMINIO_INSTITUCIONAL}`;
+
         // 1. Tenta fazer o login no Auth do Supabase
         const { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({
           email: email,
