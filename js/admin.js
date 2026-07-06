@@ -774,14 +774,19 @@ function escapeHtml(texto) {
 // =========================================================
 // Tabs
 // =========================================================
+// Função central de troca de aba, reaproveitada tanto pelos cliques diretos
+// nas abas quanto pela navegação programática (ex.: cards de filtro), para
+// que o comportamento seja sempre idêntico e consistente em todo o painel.
+function ativarAba(tabId) {
+  document.querySelectorAll('.admin-tab').forEach((t) => t.classList.remove('ativo'));
+  document.querySelectorAll('.admin-tab-content').forEach((c) => c.classList.remove('ativo'));
+  document.querySelector(`.admin-tab[data-tab="${tabId}"]`)?.classList.add('ativo');
+  document.getElementById(tabId)?.classList.add('ativo');
+}
+
 function configurarTabs() {
   document.querySelectorAll('.admin-tab').forEach((tab) => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.admin-tab').forEach((t) => t.classList.remove('ativo'));
-      document.querySelectorAll('.admin-tab-content').forEach((c) => c.classList.remove('ativo'));
-      tab.classList.add('ativo');
-      document.getElementById(tab.dataset.tab)?.classList.add('ativo');
-    });
+    tab.addEventListener('click', () => ativarAba(tab.dataset.tab));
   });
 }
 
@@ -792,6 +797,13 @@ function configurarTabs() {
 // grupo de seleção única — clicar aplica o filtro na tabela de Colaboradores
 // e destaca visualmente o card ativo. O card de "Ações nas últimas 24h" tem
 // outro papel: leva direto para a aba Atividades já filtrada nesse período.
+//
+// Correção: como "Ações nas últimas 24h" muda a aba ativa para "Atividades",
+// a aba "Colaboradores" fica oculta (display: none). Se depois disso o
+// usuário clicasse em outro card de status, o filtro era aplicado por baixo
+// dos panos, mas nada aparecia na tela — dando a impressão de que os cards
+// "travaram". Por isso, selecionar qualquer card de status agora também
+// garante o retorno à aba Colaboradores.
 function configurarCardsFiltro() {
   const cardsDeStatus = [
     { id: 'card-filtro-total', status: 'todos' },
@@ -822,23 +834,36 @@ function configurarCardsFiltro() {
   });
 }
 
+// Remove a marcação visual de "selecionado" de TODOS os cards (os 4 de
+// status + o de Ações nas últimas 24h), já que só um card por vez deve
+// aparecer como ativo — os dois grupos são mutuamente exclusivos.
+function limparSelecaoCards() {
+  document.querySelectorAll('.admin-card-clicavel').forEach((card) => {
+    card.classList.remove('admin-card-selecionado');
+  });
+}
+
 function selecionarCardStatus(status) {
   estadoColaboradores.status = status;
   estadoColaboradores.pagina = 1;
 
+  limparSelecaoCards();
   document.querySelectorAll('.admin-card-clicavel[data-status]').forEach((card) => {
     card.classList.toggle('admin-card-selecionado', card.dataset.status === status);
   });
+
+  // Garante que a aba Colaboradores esteja visível para que o filtro
+  // aplicado seja imediatamente perceptível ao usuário.
+  ativarAba('tab-colaboradores');
 
   renderizarColaboradores();
 }
 
 function irParaAtividades24h() {
-  // Ativa a aba Atividades (reaproveita o mesmo comportamento dos botões de tab)
-  document.querySelectorAll('.admin-tab').forEach((t) => t.classList.remove('ativo'));
-  document.querySelectorAll('.admin-tab-content').forEach((c) => c.classList.remove('ativo'));
-  document.querySelector('.admin-tab[data-tab="tab-logs"]')?.classList.add('ativo');
-  document.getElementById('tab-logs')?.classList.add('ativo');
+  ativarAba('tab-logs');
+
+  limparSelecaoCards();
+  document.getElementById('card-ir-atividades-24h')?.classList.add('admin-card-selecionado');
 
   // Filtro exato das últimas 24h (janela contínua, não por dia de calendário).
   // Limpa os campos de data manual, já que os dois filtros são mutuamente exclusivos.
@@ -853,6 +878,15 @@ function irParaAtividades24h() {
   if (inputFim) inputFim.value = '';
 
   renderizarLogs();
+}
+
+// Se o usuário mudar manualmente qualquer filtro da aba Atividades (ação ou
+// datas), o recorte "últimas 24h" deixa de valer — o card correspondente
+// deve perder a seleção para não ficar destacado incorretamente.
+function desmarcarCard24hSeAtivo() {
+  if (!estadoLogs.somenteUltimas24h) return;
+  estadoLogs.somenteUltimas24h = false;
+  document.getElementById('card-ir-atividades-24h')?.classList.remove('admin-card-selecionado');
 }
 
 // =========================================================
@@ -906,13 +940,13 @@ function configurarToolbarLogs() {
   });
   document.getElementById('filtro-log-data-inicio')?.addEventListener('change', (e) => {
     estadoLogs.dataInicio = e.target.value;
-    estadoLogs.somenteUltimas24h = false;
+    desmarcarCard24hSeAtivo();
     estadoLogs.pagina = 1;
     renderizarLogs();
   });
   document.getElementById('filtro-log-data-fim')?.addEventListener('change', (e) => {
     estadoLogs.dataFim = e.target.value;
-    estadoLogs.somenteUltimas24h = false;
+    desmarcarCard24hSeAtivo();
     estadoLogs.pagina = 1;
     renderizarLogs();
   });
