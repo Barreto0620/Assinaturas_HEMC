@@ -8,12 +8,15 @@ let TODOS_LOGS = [];
 let ADMIN_ATUAL = null;
 let CANAL_REALTIME = null;
 
-let DEPARTAMENTOS = [];
-let DEPARTAMENTOS_POR_ID = {};
+// Lista de setores distintos, derivada diretamente dos colaboradores
+// carregados (o setor agora é um campo de texto direto em "profiles",
+// preenchido a partir da planilha de RH — não existe mais uma tabela
+// separada de departamentos para resolver por id).
+let SETORES = [];
 
 const estadoColaboradores = {
   status: 'todos',
-  departamentoId: 'todos',
+  setor: 'todos',
   termo: '',
   ordenarPor: 'nome_completo',
   ordenarDir: 'asc',
@@ -49,7 +52,7 @@ const MAPA_CAMPOS = {
   cargo: 'Cargo',
   telefone: 'Ramal/Telefone',
   ativo: 'Status',
-  departamento_id: 'Departamento',
+  setor: 'Setor',
   re: 'RE',
 };
 
@@ -73,7 +76,6 @@ const MAPA_CAMPOS = {
   configurarModais();
   configurarTema();
 
-  await carregarDepartamentos();
   await carregarTudo();
   configurarRealtime();
 })();
@@ -82,64 +84,39 @@ document.getElementById('btn-logout')?.addEventListener('click', fazerLogout);
 document.getElementById('erro-banner-retry')?.addEventListener('click', carregarTudo);
 
 // =========================================================
-// Departamentos
+// Setores (derivados dos colaboradores carregados)
 // =========================================================
-async function carregarDepartamentos() {
-  try {
-    DEPARTAMENTOS = await buscarDepartamentos();
-    DEPARTAMENTOS_POR_ID = Object.fromEntries(DEPARTAMENTOS.map((d) => [d.id, d.nome]));
-    popularFiltroDepartamentos();
-    popularSelectDepartamentoEdicao();
-  } catch (erro) {
-    console.error('Erro ao carregar departamentos:', erro);
-    mostrarToast('Não foi possível carregar a lista de departamentos.', 'alerta');
+function recalcularSetores() {
+  const unicos = new Set();
+  TODOS_COLABORADORES.forEach((c) => {
+    if (c.setor) unicos.add(c.setor);
+  });
+  SETORES = Array.from(unicos).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  popularFiltroSetores();
+  popularDatalistSetores();
+}
+
+function popularFiltroSetores() {
+  const select = document.getElementById('filtro-setor');
+  if (!select) return;
+  const valorAtual = select.value || 'todos';
+  select.querySelectorAll('option:not([value="todos"])').forEach((op) => op.remove());
+  SETORES.forEach((setor) => {
+    const opt = document.createElement('option');
+    opt.value = setor;
+    opt.textContent = setor;
+    select.appendChild(opt);
+  });
+  // Preserva a seleção do usuário caso o setor ainda exista na lista atualizada
+  if (SETORES.includes(valorAtual) || valorAtual === 'todos') {
+    select.value = valorAtual;
   }
 }
 
-async function buscarDepartamentos() {
-  const { data, error } = await supabaseClient
-    .from('departamentos')
-    .select('id, nome')
-    .order('nome', { ascending: true });
-  if (error) throw error;
-  return data || [];
-}
-
-function popularFiltroDepartamentos() {
-  const select = document.getElementById('filtro-departamento');
-  if (!select) return;
-  // Mantém a opção "Todos" e recria as demais, para suportar recarregamento.
-  select.querySelectorAll('option:not([value="todos"])').forEach((op) => op.remove());
-  DEPARTAMENTOS.forEach((d) => {
-    const opt = document.createElement('option');
-    opt.value = d.id;
-    opt.textContent = d.nome;
-    select.appendChild(opt);
-  });
-}
-
-function popularSelectDepartamentoEdicao() {
-  const select = document.getElementById('edit-departamento');
-  if (!select) return;
-  select.querySelectorAll('option:not([value=""])').forEach((op) => op.remove());
-  DEPARTAMENTOS.forEach((d) => {
-    const opt = document.createElement('option');
-    opt.value = d.id;
-    opt.textContent = d.nome;
-    select.appendChild(opt);
-  });
-}
-
-function nomeDepartamento(id) {
-  if (!id) return null;
-  return DEPARTAMENTOS_POR_ID[id] || null;
-}
-
-// Enriquece um colaborador vindo do backend com o nome do departamento
-// (resolvido localmente a partir do departamento_id), já que a Edge Function
-// pode retornar apenas o id.
-function enriquecerColaborador(c) {
-  return { ...c, departamento_nome: nomeDepartamento(c.departamento_id) };
+function popularDatalistSetores() {
+  const datalist = document.getElementById('lista-setores');
+  if (!datalist) return;
+  datalist.innerHTML = SETORES.map((setor) => `<option value="${escapeHtml(setor)}"></option>`).join('');
 }
 
 // =========================================================
@@ -151,6 +128,7 @@ async function carregarTudo() {
     const [colaboradores, logs] = await Promise.all([buscarColaboradores(), buscarLogs()]);
     TODOS_COLABORADORES = colaboradores;
     TODOS_LOGS = logs;
+    recalcularSetores();
     atualizarCards();
     renderizarColaboradores();
     renderizarLogs();
@@ -163,12 +141,11 @@ async function carregarTudo() {
 async function buscarColaboradores() {
   // Busca através da Edge Function ("listar_colaboradores"), que cruza o
   // Supabase Auth (fonte de verdade de quem já tem e-mail cadastrado) com a
-  // tabela "profiles" (dados preenchidos no 1º acesso). Isso garante que
-  // TODO e-mail já criado no Auth apareça na lista — inclusive quem ainda
-  // nunca fez login — e não só quem já tem um perfil montado.
+  // tabela "profiles" (dados preenchidos no 1º acesso, incluindo o setor).
+  // Isso garante que TODO e-mail já criado no Auth apareça na lista —
+  // inclusive quem ainda nunca fez login — e não só quem já tem perfil.
   const resposta = await chamarAcaoAdmin('listar_colaboradores', null, { pagina: 1, limite: 5000 });
-  const colaboradores = resposta?.colaboradores || [];
-  return colaboradores.map(enriquecerColaborador);
+  return resposta?.colaboradores || [];
 }
 
 async function buscarLogs() {
@@ -253,7 +230,7 @@ function renderizarBadgeStatus(c) {
 function obterColaboradoresFiltrados() {
   const termo = estadoColaboradores.termo;
   const status = estadoColaboradores.status;
-  const departamentoId = estadoColaboradores.departamentoId;
+  const setor = estadoColaboradores.setor;
 
   let lista = TODOS_COLABORADORES.filter((c) => {
     const bateTermo = !termo ||
@@ -263,9 +240,9 @@ function obterColaboradoresFiltrados() {
     const bateStatus =
       status === 'todos' ||
       status === calcularStatus(c);
-    const bateDepartamento =
-      departamentoId === 'todos' || c.departamento_id === departamentoId;
-    return bateTermo && bateStatus && bateDepartamento;
+    const bateSetor =
+      setor === 'todos' || c.setor === setor;
+    return bateTermo && bateStatus && bateSetor;
   });
 
   const { ordenarPor, ordenarDir } = estadoColaboradores;
@@ -326,7 +303,7 @@ function renderizarColaboradores() {
           </div>
         </td>
         <td class="admin-cel-muted admin-cel-mono">${c.email ? escapeHtml(c.email) : '—'}</td>
-        <td>${c.departamento_nome ? escapeHtml(c.departamento_nome) : '<span class="admin-cel-muted">Não definido</span>'}</td>
+        <td>${c.setor ? escapeHtml(c.setor) : '<span class="admin-cel-muted">Não definido</span>'}</td>
         <td class="admin-cel-mono">${c.re ?? '<span class="admin-cel-muted">—</span>'}</td>
         <td>${escapeHtml(c.cargo || '—')}</td>
         <td>${renderizarBadgeStatus(c)}</td>
@@ -411,7 +388,12 @@ function renderizarLogs() {
     return;
   }
 
+  // Mapas auxiliares para enriquecer cada evento com nome e setor de quem
+  // sofreu a ação (usuario_id) e de quem a executou (executado_por), sem
+  // precisar de nenhuma consulta adicional — os dados já estão carregados
+  // em TODOS_COLABORADORES.
   const nomesPorId = Object.fromEntries(TODOS_COLABORADORES.map((c) => [c.id, c.nome_completo]));
+  const setoresPorId = Object.fromEntries(TODOS_COLABORADORES.map((c) => [c.id, c.setor]));
 
   let grupoAtual = null;
   let html = '';
@@ -423,6 +405,8 @@ function renderizarLogs() {
     }
     const meta = MAPA_ACOES[l.acao] || { rotulo: l.acao, tom: 'neutro', icone: '•' };
     const executor = l.executado_por ? (nomesPorId[l.executado_por] || 'Admin') : 'Próprio usuário';
+    const setorAlvo = setoresPorId[l.usuario_id] || null;
+    const setorExecutor = l.executado_por ? (setoresPorId[l.executado_por] || null) : null;
     const temDetalhes = l.detalhes && Object.keys(l.detalhes).length > 0;
     const resumo = resumoDetalhesLog(l);
 
@@ -433,11 +417,12 @@ function renderizarLogs() {
           <div class="admin-timeline-linha1">
             <span class="admin-timeline-nome">${escapeHtml(l.nome_no_momento)}</span>
             <span class="admin-badge admin-badge-acao tom-${meta.tom}">${meta.rotulo}</span>
+            ${setorAlvo ? `<span class="admin-badge admin-badge-setor" title="Setor do colaborador afetado">${escapeHtml(setorAlvo)}</span>` : ''}
           </div>
           <div class="admin-timeline-linha2">
             <span class="admin-cel-mono">${formatarHora(l.criado_em)}</span>
             <span class="admin-timeline-ponto">·</span>
-            <span>por ${escapeHtml(executor)}</span>
+            <span>por ${escapeHtml(executor)}${setorExecutor ? ` <span class="admin-timeline-setor-executor">(${escapeHtml(setorExecutor)})</span>` : ''}</span>
             ${temDetalhes ? `<button class="admin-link-detalhes" data-detalhes-id="${l.id}">Ver detalhes</button>` : ''}
           </div>
           ${resumo ? `<div class="admin-timeline-linha3">${resumo}</div>` : ''}
@@ -465,7 +450,7 @@ function resumoDetalhesLog(log) {
     const pares = [];
     if (detalhes.nome_completo) pares.push({ rotulo: 'Nome', valor: detalhes.nome_completo });
     if (detalhes.cargo) pares.push({ rotulo: 'Cargo', valor: detalhes.cargo });
-    if (detalhes.departamento) pares.push({ rotulo: 'Departamento', valor: detalhes.departamento });
+    if (detalhes.setor) pares.push({ rotulo: 'Setor', valor: detalhes.setor });
     if (detalhes.re) pares.push({ rotulo: 'RE', valor: detalhes.re, mono: true });
     if (detalhes.ramal) pares.push({ rotulo: 'Ramal', valor: detalhes.ramal, mono: true });
     if (pares.length) blocos.push(construirChipsInfo(pares));
@@ -515,6 +500,7 @@ function construirBlocoDiff(alteracoes) {
 
 // =========================================================
 // Estilos da timeline de logs (chips + bloco de diff) + badge "nunca acessou"
+// + badge de setor (colaborador afetado / executor)
 // =========================================================
 function injetarEstilosTimelineLogs() {
   if (document.getElementById('admin-log-estilos-dinamicos')) return;
@@ -622,6 +608,26 @@ function injetarEstilosTimelineLogs() {
       border: 1px solid rgba(255, 99, 99, 0.28);
     }
 
+    /* Badge de Setor na timeline — identifica de forma discreta e elegante
+       a qual setor pertence o colaborador afetado pelo evento. Tom azul-
+       violeta para se diferenciar dos badges de ação (verde/vermelho/âmbar). */
+    .admin-badge-setor {
+      background: rgba(129, 140, 248, 0.12);
+      color: #9099f5;
+      border: 1px solid rgba(129, 140, 248, 0.3);
+      font-weight: 600;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    /* Setor do executor da ação — texto discreto entre parênteses, ao
+       lado do nome de quem executou, sem competir visualmente com o
+       badge principal do colaborador afetado. */
+    .admin-timeline-setor-executor {
+      opacity: 0.65;
+      font-size: 11.5px;
+    }
+
     [data-theme="light"] .admin-log-chip {
       background: rgba(39, 68, 127, 0.06);
       border-color: rgba(39, 68, 127, 0.16);
@@ -635,6 +641,12 @@ function injetarEstilosTimelineLogs() {
       background: rgba(220, 38, 38, 0.08);
       color: #dc2626;
       border-color: rgba(220, 38, 38, 0.22);
+    }
+
+    [data-theme="light"] .admin-badge-setor {
+      background: rgba(79, 70, 229, 0.08);
+      color: #4f46e5;
+      border-color: rgba(79, 70, 229, 0.22);
     }
 
     /* Correção da linha divisória horizontal entre as linhas da tabela:
@@ -900,8 +912,8 @@ function configurarToolbarColaboradores() {
     renderizarColaboradores();
   }, 200));
 
-  document.getElementById('filtro-departamento')?.addEventListener('change', (e) => {
-    estadoColaboradores.departamentoId = e.target.value;
+  document.getElementById('filtro-setor')?.addEventListener('change', (e) => {
+    estadoColaboradores.setor = e.target.value;
     estadoColaboradores.pagina = 1;
     renderizarColaboradores();
   });
@@ -1175,11 +1187,11 @@ function exportarEmailsPendentesCSV() {
     return;
   }
 
-  const cabecalho = ['E-mail', 'Nome', 'Departamento', 'Criado em (Auth)'];
+  const cabecalho = ['E-mail', 'Nome', 'Setor', 'Criado em (Auth)'];
   const linhas = pendentes.map((c) => [
     c.email || '',
     c.nome_completo || '',
-    c.departamento_nome || '',
+    c.setor || '',
     c.criado_em_auth ? formatarData(c.criado_em_auth) : '',
   ]);
 
@@ -1228,7 +1240,7 @@ function configurarModais() {
     const nome_completo = document.getElementById('edit-nome').value.trim();
     const cargo = document.getElementById('edit-cargo').value.trim();
     const ramal = document.getElementById('edit-ramal').value.trim();
-    const departamentoId = document.getElementById('edit-departamento').value || null;
+    const setor = document.getElementById('edit-setor').value.trim() || null;
     const reValorBruto = document.getElementById('edit-re').value.trim();
     const re = reValorBruto ? Number(reValorBruto) : null;
     const btnSalvar = document.getElementById('btn-salvar-edicao');
@@ -1243,7 +1255,7 @@ function configurarModais() {
         nome_completo,
         cargo,
         telefone: telefoneNovo,
-        departamento_id: departamentoId,
+        setor,
         re,
       };
 
@@ -1260,11 +1272,8 @@ function configurarModais() {
         if (telefoneNovo !== undefined && (colaboradorAntes.telefone || '') !== telefoneNovo) {
           alteracoes.telefone = { de: colaboradorAntes.telefone || null, para: telefoneNovo };
         }
-        if ((colaboradorAntes.departamento_id || null) !== (departamentoId || null)) {
-          alteracoes.departamento_id = {
-            de: nomeDepartamento(colaboradorAntes.departamento_id) || 'Sem departamento',
-            para: nomeDepartamento(departamentoId) || 'Sem departamento',
-          };
+        if ((colaboradorAntes.setor || null) !== (setor || null)) {
+          alteracoes.setor = { de: colaboradorAntes.setor || 'Sem setor', para: setor || 'Sem setor' };
         }
         const reAntes = colaboradorAntes.re ?? null;
         if (reAntes !== re) {
@@ -1281,8 +1290,8 @@ function configurarModais() {
 
       if (colaboradorAntes) {
         Object.assign(colaboradorAntes, novosDados);
-        colaboradorAntes.departamento_nome = nomeDepartamento(colaboradorAntes.departamento_id);
         colaboradorAntes.possui_perfil = true;
+        recalcularSetores();
         renderizarColaboradores();
       }
 
@@ -1370,7 +1379,7 @@ function fecharModal(overlay) {
 function abrirModalEditar(colaborador) {
   document.getElementById('edit-id').value = colaborador.id;
   document.getElementById('edit-nome').value = colaborador.nome_completo || '';
-  document.getElementById('edit-departamento').value = colaborador.departamento_id || '';
+  document.getElementById('edit-setor').value = colaborador.setor || '';
   document.getElementById('edit-re').value = colaborador.re ?? '';
   document.getElementById('edit-cargo').value = colaborador.cargo || '';
   document.getElementById('edit-ramal').value = (colaborador.telefone || '').replace(/\D/g, '').slice(-4);
@@ -1425,16 +1434,15 @@ function aplicarMudancaColaborador(payload) {
     if (existente) {
       // Já existia na lista (vindo do Auth, sem perfil ainda) — agora ganhou perfil.
       Object.assign(existente, payload.new, { possui_perfil: true });
-      existente.departamento_nome = nomeDepartamento(existente.departamento_id);
       mostrarToast(`${payload.new.nome_completo} concluiu o 1º acesso.`, 'sucesso');
     } else {
-      TODOS_COLABORADORES.push(enriquecerColaborador({ ...payload.new, possui_perfil: true }));
+      TODOS_COLABORADORES.push({ ...payload.new, possui_perfil: true });
       mostrarToast(`Novo colaborador: ${payload.new.nome_completo}`, 'sucesso');
     }
   } else if (payload.eventType === 'UPDATE') {
     const idx = TODOS_COLABORADORES.findIndex((c) => c.id === payload.new.id);
     if (idx !== -1) {
-      TODOS_COLABORADORES[idx] = enriquecerColaborador({ ...payload.new, possui_perfil: true });
+      TODOS_COLABORADORES[idx] = { ...payload.new, possui_perfil: true };
     }
   } else if (payload.eventType === 'DELETE') {
     // O perfil foi apagado, mas o usuário pode continuar existindo no Auth —
@@ -1445,6 +1453,7 @@ function aplicarMudancaColaborador(payload) {
       existente.primeiro_acesso = true;
     }
   }
+  recalcularSetores();
   atualizarCards();
   renderizarColaboradores();
 }

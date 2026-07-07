@@ -84,8 +84,8 @@
           </svg>
           <input type="text" id="filtro-nome" placeholder="Buscar por nome, e-mail ou RE…">
         </div>
-        <select id="filtro-departamento" class="admin-select" aria-label="Filtrar por departamento">
-          <option value="todos">Todos os departamentos</option>
+        <select id="filtro-setor" class="admin-select" aria-label="Filtrar por setor">
+          <option value="todos">Todos os setores</option>
         </select>
         <button id="btn-emails-pendentes" class="btn btn-secundario" type="button">📋 E-mails pendentes</button>
         <span class="admin-contagem" id="contagem-colaboradores"></span>
@@ -97,7 +97,7 @@
             <tr>
               <th class="ordenavel" data-campo="nome_completo">Nome</th>
               <th class="ordenavel" data-campo="email">E-mail</th>
-              <th class="ordenavel" data-campo="departamento_nome">Departamento</th>
+              <th class="ordenavel" data-campo="setor">Setor</th>
               <th class="ordenavel" data-campo="re">RE</th>
               <th>Cargo</th>
               <th class="ordenavel" data-campo="ativo">Status</th>
@@ -202,10 +202,9 @@
           <input type="text" id="edit-nome" required>
         </div>
         <div class="campo">
-          <label for="edit-departamento">Departamento</label>
-          <select id="edit-departamento" required>
-            <option value="">Selecione…</option>
-          </select>
+          <label for="edit-setor">Setor</label>
+          <input type="text" id="edit-setor" list="lista-setores" placeholder="Ex: UTI NEONATAL">
+          <datalist id="lista-setores"></datalist>
         </div>
         <div class="campo">
           <label for="edit-re">RE (registro do colaborador)</label>
