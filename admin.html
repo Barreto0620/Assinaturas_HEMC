@@ -240,13 +240,39 @@
     </div>
   </div>
 
+  <div class="admin-overlay" id="modal-definir-senha">
+    <div class="admin-modal admin-modal-pequeno">
+      <div class="admin-modal-header">
+        <h3>Redefinir senha</h3>
+        <button class="admin-modal-fechar" data-fechar aria-label="Fechar">&times;</button>
+      </div>
+      <p class="admin-modal-texto" id="definir-senha-texto">Defina a nova senha para o colaborador. A senha atual dele deixará de funcionar.</p>
+      <form id="form-definir-senha">
+        <input type="hidden" id="definir-senha-id">
+        <div class="campo">
+          <label for="definir-senha-valor">Nova senha</label>
+          <div class="admin-senha-input-wrap">
+            <input type="text" id="definir-senha-valor" minlength="6" maxlength="72" required placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+            <button type="button" class="btn-copiar" id="btn-gerar-senha-sugestao" title="Gerar sugestão aleatória">Gerar</button>
+          </div>
+          <span class="admin-campo-ajuda">O colaborador poderá usar essa senha imediatamente no próximo login.</span>
+        </div>
+        <div id="msg-erro-definir-senha" class="mensagem-erro"></div>
+        <div class="admin-modal-acoes">
+          <button type="submit" class="btn" id="btn-confirmar-definir-senha">Confirmar redefinição</button>
+          <button type="button" class="btn btn-secundario" data-fechar>Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="admin-overlay" id="modal-senha-gerada">
     <div class="admin-modal admin-modal-pequeno">
       <div class="admin-modal-header">
         <h3>Senha redefinida</h3>
         <button class="admin-modal-fechar" data-fechar aria-label="Fechar">&times;</button>
       </div>
-      <p class="admin-modal-texto">Informe esta senha temporária ao colaborador. Ele deverá trocá-la no próximo acesso.</p>
+      <p class="admin-modal-texto">Informe esta senha ao colaborador. Ele deverá trocá-la no próximo acesso.</p>
       <div class="admin-senha-gerada-wrap">
         <div class="admin-senha-gerada" id="texto-senha-gerada">-</div>
         <button class="btn-copiar" id="btn-copiar-senha" title="Copiar senha" type="button">Copiar</button>

@@ -743,6 +743,26 @@ function injetarEstilosTimelineLogs() {
       border-color: rgba(0, 0, 0, 0.08);
       background: rgba(0, 0, 0, 0.02);
     }
+
+    /* Campo de definição de senha no modal de reset — input + botão de
+       sugestão lado a lado, com texto de ajuda discreto abaixo. */
+    .admin-senha-input-wrap {
+      display: flex;
+      gap: 8px;
+    }
+    .admin-senha-input-wrap input {
+      flex: 1;
+    }
+    .admin-senha-input-wrap .btn-copiar {
+      flex-shrink: 0;
+      padding: 0 14px;
+    }
+    .admin-campo-ajuda {
+      display: block;
+      margin-top: 6px;
+      font-size: 11.5px;
+      color: var(--assina-text-muted);
+    }
   `;
   document.head.appendChild(estilo);
 }
@@ -1060,16 +1080,7 @@ function tratarAcaoColaborador(acao, id, dataset) {
       abrirModalEditar(colaborador);
       break;
     case 'reset':
-      abrirConfirmacao(
-        'Resetar senha',
-        `Deseja gerar uma nova senha temporária para ${colaborador.nome_completo || colaborador.email}? A senha atual deixará de funcionar.`,
-        async () => {
-          const resultado = await chamarAcaoAdmin('resetar_senha', id);
-          document.getElementById('texto-senha-gerada').textContent = resultado.senhaTemporaria;
-          abrirModal('modal-senha-gerada');
-          mostrarToast('Senha temporária gerada com sucesso.', 'sucesso');
-        }
-      );
+      abrirModalDefinirSenha(colaborador);
       break;
     case 'status': {
       const ativoAtual = dataset.ativo === 'true';
@@ -1105,8 +1116,69 @@ function tratarAcaoColaborador(acao, id, dataset) {
 }
 
 // =========================================================
-// Lista dedicada: e-mails aguardando 1º acesso
+// Redefinição de senha — o admin define a senha manualmente (não é mais
+// gerada aleatoriamente por padrão), para poder informar ao colaborador
+// uma senha de sua escolha. O botão "Gerar" continua disponível como
+// atalho opcional, caso o admin prefira uma sugestão aleatória.
 // =========================================================
+function gerarSugestaoSenha() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  let senha = '';
+  for (let i = 0; i < 10; i++) senha += chars[Math.floor(Math.random() * chars.length)];
+  return senha;
+}
+
+function abrirModalDefinirSenha(colaborador) {
+  document.getElementById('definir-senha-id').value = colaborador.id;
+  document.getElementById('definir-senha-valor').value = '';
+  document.getElementById('definir-senha-texto').textContent =
+    `Defina a nova senha para ${colaborador.nome_completo || colaborador.email}. A senha atual dele deixará de funcionar.`;
+  document.getElementById('msg-erro-definir-senha').classList.remove('visivel');
+  abrirModal('modal-definir-senha');
+}
+
+function configurarModalDefinirSenha() {
+  document.getElementById('btn-gerar-senha-sugestao')?.addEventListener('click', () => {
+    document.getElementById('definir-senha-valor').value = gerarSugestaoSenha();
+  });
+
+  document.getElementById('form-definir-senha')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('definir-senha-id').value;
+    const novaSenha = document.getElementById('definir-senha-valor').value;
+    const msgErro = document.getElementById('msg-erro-definir-senha');
+    const btnConfirmar = document.getElementById('btn-confirmar-definir-senha');
+
+    msgErro.classList.remove('visivel');
+
+    if (!novaSenha || novaSenha.length < 6) {
+      msgErro.textContent = 'A senha deve ter no mínimo 6 caracteres.';
+      msgErro.classList.add('visivel');
+      return;
+    }
+
+    const colaborador = TODOS_COLABORADORES.find((c) => c.id === id);
+
+    btnConfirmar.disabled = true;
+    btnConfirmar.textContent = 'Salvando…';
+    try {
+      const resultado = await chamarAcaoAdmin('resetar_senha', id, { novaSenha });
+
+      fecharModal(document.getElementById('modal-definir-senha'));
+      document.getElementById('texto-senha-gerada').textContent = resultado.senhaTemporaria || novaSenha;
+      abrirModal('modal-senha-gerada');
+      mostrarToast(`Senha redefinida para ${colaborador?.nome_completo || colaborador?.email || 'o colaborador'}.`, 'sucesso');
+    } catch (err) {
+      msgErro.textContent = 'Erro ao redefinir: ' + err.message;
+      msgErro.classList.add('visivel');
+    } finally {
+      btnConfirmar.disabled = false;
+      btnConfirmar.textContent = 'Confirmar redefinição';
+    }
+  });
+}
+
+
 // Visão focada e profissional, separada da tabela principal, feita
 // especificamente para responder "quais e-mails ainda faltam entrar
 // pela primeira vez". Usa a mesma fonte de verdade do badge (ultimo_login
@@ -1213,6 +1285,8 @@ function exportarEmailsPendentesCSV() {
 // Modais
 // =========================================================
 function configurarModais() {
+  configurarModalDefinirSenha();
+
   document.getElementById('busca-emails-pendentes')?.addEventListener('input', debounce((e) => {
     renderizarListaEmailsPendentes(e.target.value);
   }, 150));
