@@ -15,10 +15,16 @@ const REDIRECT_URL = "gerador.html";
 // Guarda o resultado da última verificação de nome contra a base de
 // referência (colaboradores_referencia). Só permite login se nomeConferido
 // bater com o nome atualmente digitado E encontrado for true.
+// setorOficial e reOficial são capturados aqui junto com o cargo, para
+// que o setor e o RE do colaborador sejam salvos automaticamente em
+// "profiles" já no primeiro acesso — sem depender de um admin preencher
+// isso manualmente depois pelo painel.
 let estadoVerificacaoNome = {
   nomeConferido: null,
   encontrado: false,
   cargoOficial: null,
+  setorOficial: null,
+  reOficial: null,
 };
 
 const els = {
@@ -179,7 +185,10 @@ async function atualizarUltimoLogin(usuarioId) {
 // 2.2 Verificação de nome contra a base de referência
 // (colaboradores_referencia via RPC buscar_cargo_por_nome)
 // Preenche e trava o campo cargo automaticamente, impossibilitando
-// o colaborador de inserir um cargo fictício.
+// o colaborador de inserir um cargo fictício. A RPC também retorna
+// "setor" e "re", capturados aqui e usados depois em sincronizarPerfil()
+// para que o painel administrativo já veja esses dados preenchidos
+// desde o primeiro acesso, sem intervenção manual.
 // =========================================================
 
 let timeoutVerificacaoNome = null;
@@ -189,7 +198,7 @@ async function verificarNomeInstitucional(nomeDigitado) {
 
   if (nome.length < 3) {
     resetarStatusCargo();
-    estadoVerificacaoNome = { nomeConferido: null, encontrado: false, cargoOficial: null };
+    estadoVerificacaoNome = { nomeConferido: null, encontrado: false, cargoOficial: null, setorOficial: null, reOficial: null };
     return;
   }
 
@@ -201,11 +210,17 @@ async function verificarNomeInstitucional(nomeDigitado) {
     if (error) throw error;
 
     if (data && data.length > 0) {
-      estadoVerificacaoNome = { nomeConferido: nome, encontrado: true, cargoOficial: data[0].cargo };
+      estadoVerificacaoNome = {
+        nomeConferido: nome,
+        encontrado: true,
+        cargoOficial: data[0].cargo,
+        setorOficial: data[0].setor ?? null,
+        reOficial: data[0].re ?? null,
+      };
       setCargoValidado(data[0].cargo);
-      log("verificarNomeInstitucional:encontrado", { nome, cargo: data[0].cargo });
+      log("verificarNomeInstitucional:encontrado", { nome, cargo: data[0].cargo, setor: data[0].setor, re: data[0].re });
     } else {
-      estadoVerificacaoNome = { nomeConferido: nome, encontrado: false, cargoOficial: null };
+      estadoVerificacaoNome = { nomeConferido: nome, encontrado: false, cargoOficial: null, setorOficial: null, reOficial: null };
       setNomeNaoLocalizado();
       log("verificarNomeInstitucional:naoEncontrado", { nome });
     }
@@ -213,7 +228,7 @@ async function verificarNomeInstitucional(nomeDigitado) {
     logErro("verificarNomeInstitucional", erro);
     // Falha de rede/RPC não deve travar o usuário indefinidamente,
     // mas também não libera o cargo: pede para tentar novamente.
-    estadoVerificacaoNome = { nomeConferido: null, encontrado: false, cargoOficial: null };
+    estadoVerificacaoNome = { nomeConferido: null, encontrado: false, cargoOficial: null, setorOficial: null, reOficial: null };
     if (els.cargo) {
       els.cargo.value = "";
       els.cargo.placeholder = "Não foi possível verificar. Saia e volte ao campo Nome.";
@@ -247,6 +262,10 @@ function coletarDadosFormulario() {
     cargo,
     ramal,
     telefoneFormatado: ramal ? `${PREFIXO_RAMAL}${ramal}` : "",
+    // Setor e RE não vêm de um campo do formulário — vêm direto da base
+    // de referência, capturados durante a verificação do nome.
+    setor: estadoVerificacaoNome.setorOficial,
+    re: estadoVerificacaoNome.reOficial,
   };
 }
 
@@ -306,10 +325,14 @@ function montarDiffPerfil(perfilAntes, dados) {
   const nomeAntes = normalizarParaComparacao(perfilAntes?.nome_completo);
   const cargoAntes = normalizarParaComparacao(perfilAntes?.cargo);
   const telefoneAntes = normalizarParaComparacao(perfilAntes?.telefone);
+  const setorAntes = normalizarParaComparacao(perfilAntes?.setor);
+  const reAntes = perfilAntes?.re ?? null;
 
   const nomeDepois = normalizarParaComparacao(dados.nomeCompleto);
   const cargoDepois = normalizarParaComparacao(dados.cargo);
   const telefoneDepois = normalizarParaComparacao(dados.telefoneFormatado);
+  const setorDepois = normalizarParaComparacao(dados.setor);
+  const reDepois = dados.re ?? null;
 
   if (nomeAntes !== nomeDepois) {
     alteracoes.nome_completo = { de: nomeAntes, para: nomeDepois };
@@ -319,6 +342,12 @@ function montarDiffPerfil(perfilAntes, dados) {
   }
   if (telefoneAntes !== telefoneDepois) {
     alteracoes.telefone = { de: telefoneAntes, para: telefoneDepois };
+  }
+  if (setorAntes !== setorDepois && setorDepois) {
+    alteracoes.setor = { de: setorAntes, para: setorDepois };
+  }
+  if (reAntes !== reDepois && reDepois !== null) {
+    alteracoes.re = { de: reAntes, para: reDepois };
   }
 
   return alteracoes;
@@ -344,8 +373,8 @@ async function autenticar(email, senha) {
 // 5. Validação de conta ativa e verificação de primeiro acesso
 // Verifica se o perfil existe, não está desativado/bloqueado e
 // se a senha já foi redefinida (primeiro acesso).
-// Também traz nome/cargo/telefone/email já salvos, para servir de
-// base de comparação (diff) no log de login.
+// Também traz nome/cargo/telefone/email/setor/re já salvos, para servir
+// de base de comparação (diff) no log de login.
 // Tolerante à ausência das colunas "ativo" e "senha_redefinida"
 // (não quebra caso não existam — trata como já liberado/redefinido).
 // =========================================================
@@ -353,7 +382,7 @@ async function autenticar(email, senha) {
 async function validarContaAtiva(usuarioId) {
   const { data: perfil, error } = await supabaseClient
     .from("profiles")
-    .select("id, ativo, senha_redefinida, nome_completo, cargo, telefone, email")
+    .select("id, ativo, senha_redefinida, nome_completo, cargo, telefone, email, setor, re")
     .eq("id", usuarioId)
     .maybeSingle();
 
@@ -375,13 +404,24 @@ async function validarContaAtiva(usuarioId) {
 
 // =========================================================
 // 6. Sincronização do perfil (tabela "profiles")
-// Único ponto de persistência de nome/cargo/telefone/email — não
-// usamos mais auth.updateUser() para evitar duplicidade de fontes.
-// O e-mail é gravado aqui porque o painel administrativo lê a
-// coluna "profiles.email" (não tem acesso a auth.users via RLS).
+// Único ponto de persistência de nome/cargo/telefone/email/setor/re —
+// não usamos mais auth.updateUser() para evitar duplicidade de fontes.
+// O e-mail é gravado aqui porque o painel administrativo lê a coluna
+// "profiles.email" (não tem acesso a auth.users via RLS).
+//
+// "setor" e "re" só são sobrescritos quando a base de referência retornou
+// um valor (COALESCE com o dado já existente) — assim, se por algum
+// motivo a verificação de nome não encontrar a pessoa numa sessão futura,
+// não apagamos um setor/RE que já estava corretamente salvo antes.
 // =========================================================
 
-async function sincronizarPerfil(usuarioId, nomeCompleto, cargo, telefoneFormatado, email) {
+async function sincronizarPerfil(usuarioId, nomeCompleto, cargo, telefoneFormatado, email, setor, re) {
+  const { data: perfilAtual } = await supabaseClient
+    .from("profiles")
+    .select("setor, re")
+    .eq("id", usuarioId)
+    .maybeSingle();
+
   const { error } = await supabaseClient
     .from("profiles")
     .upsert(
@@ -391,6 +431,8 @@ async function sincronizarPerfil(usuarioId, nomeCompleto, cargo, telefoneFormata
         cargo,
         telefone: telefoneFormatado,
         email,
+        setor: setor ?? perfilAtual?.setor ?? null,
+        re: re ?? perfilAtual?.re ?? null,
       },
       { onConflict: "id" }
     );
@@ -400,7 +442,7 @@ async function sincronizarPerfil(usuarioId, nomeCompleto, cargo, telefoneFormata
     throw new Error("Não foi possível sincronizar os dados do perfil institucional.");
   }
 
-  log("sincronizarPerfil:sucesso", { usuarioId, cargo });
+  log("sincronizarPerfil:sucesso", { usuarioId, cargo, setor, re });
 }
 
 // =========================================================
@@ -484,12 +526,20 @@ async function processarLogin(evento) {
       return;
     }
 
-    await sincronizarPerfil(usuario.id, dados.nomeCompleto, dados.cargo, dados.telefoneFormatado, dados.email);
+    await sincronizarPerfil(
+      usuario.id,
+      dados.nomeCompleto,
+      dados.cargo,
+      dados.telefoneFormatado,
+      dados.email,
+      dados.setor,
+      dados.re
+    );
     await atualizarUltimoLogin(usuario.id);
 
     // ---------------------------------------------------------
-    // 📋 Log detalhado do login — registra com qual nome, cargo e
-    // ramal o colaborador efetivamente entrou, e sinaliza (via
+    // 📋 Log detalhado do login — registra com qual nome, cargo, setor,
+    // RE e ramal o colaborador efetivamente entrou, e sinaliza (via
     // campos_alterados) caso algum desses dados tenha mudado em
     // relação ao que estava salvo no acesso anterior.
     // ---------------------------------------------------------
@@ -497,6 +547,7 @@ async function processarLogin(evento) {
     await registrarAtividade(usuario.id, dados.nomeCompleto, "login", {
       nome_completo: dados.nomeCompleto,
       cargo: dados.cargo,
+      setor: dados.setor,
       ramal: dados.telefoneFormatado,
       email: dados.email,
       ...(Object.keys(alteracoesPerfil).length ? { campos_alterados: alteracoesPerfil } : {}),
