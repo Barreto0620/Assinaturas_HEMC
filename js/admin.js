@@ -1261,6 +1261,31 @@ function configurarModais() {
 
       await chamarAcaoAdmin('atualizar_perfil', id, novosDados);
 
+      // ---------------------------------------------------------
+      // Sincroniza cargo/setor com colaboradores_referencia (base
+      // consultada pelo login para validar nome e preencher o Cargo
+      // automaticamente). Isolado numa function própria para não
+      // arriscar o fluxo principal de "atualizar_perfil" — se essa
+      // sincronização falhar, o perfil já foi salvo normalmente, só
+      // avisamos o admin que a base institucional pode ficar desatualizada.
+      // ---------------------------------------------------------
+      const cargoOuSetorMudou =
+        (colaboradorAntes?.cargo || '') !== cargo ||
+        (colaboradorAntes?.setor || null) !== (setor || null);
+
+      if (cargoOuSetorMudou) {
+        try {
+          const { error: erroSync } = await supabaseClient.functions.invoke('admin-sync-referencia', {
+            body: { usuario_id: id },
+          });
+          if (erroSync) throw erroSync;
+        } catch (erroSync) {
+          console.error('Erro ao sincronizar com colaboradores_referencia:', erroSync);
+          mostrarToast('Perfil salvo, mas a sincronização com a base institucional falhou. Avise o time de TI.', 'alerta');
+        }
+      }
+
+
       const alteracoes = {};
       if (colaboradorAntes) {
         if ((colaboradorAntes.nome_completo || '') !== nome_completo) {
