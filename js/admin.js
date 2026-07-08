@@ -456,6 +456,16 @@ function resumoDetalhesLog(log) {
     if (pares.length) blocos.push(construirChipsInfo(pares));
   }
 
+  if (log.acao === 'cadastro') {
+    const pares = [];
+    if (detalhes.nome_completo) pares.push({ rotulo: 'Nome', valor: detalhes.nome_completo });
+    if (detalhes.cargo) pares.push({ rotulo: 'Cargo', valor: detalhes.cargo });
+    if (detalhes.setor) pares.push({ rotulo: 'Setor', valor: detalhes.setor });
+    if (detalhes.re) pares.push({ rotulo: 'RE', valor: detalhes.re, mono: true });
+    if (detalhes.email) pares.push({ rotulo: 'E-mail', valor: detalhes.email, mono: true });
+    if (pares.length) blocos.push(construirChipsInfo(pares));
+  }
+
   const blocoDiff = construirBlocoDiff(detalhes.campos_alterados);
   if (blocoDiff) blocos.push(blocoDiff);
 
@@ -500,7 +510,7 @@ function construirBlocoDiff(alteracoes) {
 
 // =========================================================
 // Estilos da timeline de logs (chips + bloco de diff) + badge "nunca acessou"
-// + badge de setor (colaborador afetado / executor)
+// + badge de setor (colaborador afetado / executor) + modal de cadastro
 // =========================================================
 function injetarEstilosTimelineLogs() {
   if (document.getElementById('admin-log-estilos-dinamicos')) return;
@@ -744,8 +754,8 @@ function injetarEstilosTimelineLogs() {
       background: rgba(0, 0, 0, 0.02);
     }
 
-    /* Campo de definição de senha no modal de reset — input + botão de
-       sugestão lado a lado, com texto de ajuda discreto abaixo. */
+    /* Campo de definição de senha nos modais de reset/cadastro — input +
+       botão de sugestão lado a lado, com texto de ajuda discreto abaixo. */
     .admin-senha-input-wrap {
       display: flex;
       gap: 8px;
@@ -762,6 +772,89 @@ function injetarEstilosTimelineLogs() {
       margin-top: 6px;
       font-size: 11.5px;
       color: var(--assina-text-muted);
+    }
+    .admin-campo-opcional {
+      font-weight: 400;
+      opacity: 0.6;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    /* =========================================================
+       Modal de Cadastro de Colaborador — alternador de modo
+       ========================================================= */
+    .admin-campo-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 520px) {
+      .admin-campo-grid-2 {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .admin-modo-toggle {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .admin-modo-opcao {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+      text-align: left;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1.5px solid var(--assina-border);
+      background: var(--assina-bg-1);
+      cursor: pointer;
+      transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
+    }
+    .admin-modo-opcao:hover {
+      transform: translateY(-1px);
+    }
+    .admin-modo-titulo {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--assina-text);
+    }
+    .admin-modo-desc {
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--assina-text-muted);
+    }
+
+    .admin-modo-azul.ativo {
+      border-color: var(--assina-blue-500);
+      background: rgba(79, 109, 245, 0.10);
+      box-shadow: 0 0 0 1px var(--assina-blue-500) inset;
+    }
+    .admin-modo-azul.ativo .admin-modo-titulo {
+      color: var(--assina-blue-400);
+    }
+
+    .admin-modo-vermelho.ativo {
+      border-color: var(--assina-erro-border);
+      background: var(--assina-erro-bg);
+      box-shadow: 0 0 0 1px var(--assina-erro) inset;
+    }
+    .admin-modo-vermelho.ativo .admin-modo-titulo {
+      color: var(--assina-erro);
+    }
+
+    .admin-campos-condicionais {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding-top: 4px;
+      border-top: 1px dashed var(--assina-border);
+      margin-top: 4px;
+    }
+    .admin-campos-condicionais[hidden] {
+      display: none;
     }
   `;
   document.head.appendChild(estilo);
@@ -1165,8 +1258,10 @@ function configurarModalDefinirSenha() {
       const resultado = await chamarAcaoAdmin('resetar_senha', id, { novaSenha });
 
       fecharModal(document.getElementById('modal-definir-senha'));
-      document.getElementById('texto-senha-gerada').textContent = resultado.senhaTemporaria || novaSenha;
-      abrirModal('modal-senha-gerada');
+      abrirModalSenhaGerada(
+        resultado.senhaTemporaria || novaSenha,
+        `Informe esta senha a ${colaborador?.nome_completo || colaborador?.email || 'o colaborador'}. Ele deverá trocá-la no próximo acesso.`
+      );
       mostrarToast(`Senha redefinida para ${colaborador?.nome_completo || colaborador?.email || 'o colaborador'}.`, 'sucesso');
     } catch (err) {
       msgErro.textContent = 'Erro ao redefinir: ' + err.message;
@@ -1178,7 +1273,163 @@ function configurarModalDefinirSenha() {
   });
 }
 
+// Modal de revelação de senha — reaproveitado tanto pelo reset de senha
+// quanto pelo cadastro em "Acesso Completo", com um texto de introdução
+// customizável para cada contexto.
+function abrirModalSenhaGerada(senha, textoIntro) {
+  const elTexto = document.getElementById('senha-gerada-texto');
+  if (elTexto) {
+    elTexto.textContent = textoIntro || 'Informe esta senha ao colaborador. Ele deverá trocá-la no próximo acesso.';
+  }
+  document.getElementById('texto-senha-gerada').textContent = senha;
+  abrirModal('modal-senha-gerada');
+}
 
+// =========================================================
+// Cadastro de colaborador — dois modos:
+//  "referencia": só grava em colaboradores_referencia (RE/cargo/setor).
+//  "completo":   também cria e-mail + senha inicial no Supabase Auth.
+// =========================================================
+function abrirModalCadastro() {
+  document.getElementById('form-cadastrar-colaborador')?.reset();
+  document.getElementById('msg-erro-cadastro')?.classList.remove('visivel');
+  alternarModoCadastro('referencia');
+  abrirModal('modal-cadastrar-colaborador');
+}
+
+function alternarModoCadastro(modo) {
+  document.getElementById('cadastro-modo').value = modo;
+
+  const btnReferencia = document.getElementById('btn-modo-referencia');
+  const btnCompleto = document.getElementById('btn-modo-completo');
+  btnReferencia?.classList.toggle('ativo', modo === 'referencia');
+  btnReferencia?.setAttribute('aria-selected', String(modo === 'referencia'));
+  btnCompleto?.classList.toggle('ativo', modo === 'completo');
+  btnCompleto?.setAttribute('aria-selected', String(modo === 'completo'));
+
+  const camposAcesso = document.getElementById('cadastro-campos-acesso');
+  const inputEmail = document.getElementById('cadastro-email');
+  const inputSenha = document.getElementById('cadastro-senha');
+  const btnConfirmar = document.getElementById('btn-confirmar-cadastro');
+
+  if (modo === 'completo') {
+    camposAcesso.hidden = false;
+    inputEmail?.setAttribute('required', 'required');
+    inputSenha?.setAttribute('required', 'required');
+    if (btnConfirmar) btnConfirmar.textContent = 'Cadastrar e criar acesso';
+  } else {
+    camposAcesso.hidden = true;
+    inputEmail?.removeAttribute('required');
+    inputSenha?.removeAttribute('required');
+    if (btnConfirmar) btnConfirmar.textContent = 'Cadastrar na base de referência';
+  }
+}
+
+function configurarModalCadastro() {
+  document.getElementById('btn-cadastrar-colaborador')?.addEventListener('click', abrirModalCadastro);
+
+  document.getElementById('btn-modo-referencia')?.addEventListener('click', () => alternarModoCadastro('referencia'));
+  document.getElementById('btn-modo-completo')?.addEventListener('click', () => alternarModoCadastro('completo'));
+
+  document.getElementById('btn-gerar-senha-cadastro')?.addEventListener('click', () => {
+    document.getElementById('cadastro-senha').value = gerarSugestaoSenha();
+  });
+
+  document.getElementById('form-cadastrar-colaborador')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const msgErro = document.getElementById('msg-erro-cadastro');
+    const btnConfirmar = document.getElementById('btn-confirmar-cadastro');
+    msgErro.classList.remove('visivel');
+
+    const modo = document.getElementById('cadastro-modo').value;
+    const nome_completo = document.getElementById('cadastro-nome').value.trim();
+    const reValorBruto = document.getElementById('cadastro-re').value.trim();
+    const cargo = document.getElementById('cadastro-cargo').value.trim();
+    const setor = document.getElementById('cadastro-setor').value.trim();
+    const departamento_nome = document.getElementById('cadastro-departamento').value.trim();
+    const email_prefixo = document.getElementById('cadastro-email').value.trim();
+    const senha = document.getElementById('cadastro-senha').value;
+
+    if (nome_completo.length < 3) {
+      msgErro.textContent = 'Informe o nome completo do colaborador.';
+      msgErro.classList.add('visivel');
+      return;
+    }
+    if (!reValorBruto || Number(reValorBruto) <= 0) {
+      msgErro.textContent = 'Informe um RE (matrícula) válido.';
+      msgErro.classList.add('visivel');
+      return;
+    }
+    if (!cargo) {
+      msgErro.textContent = 'Informe o cargo do colaborador.';
+      msgErro.classList.add('visivel');
+      return;
+    }
+    if (!setor) {
+      msgErro.textContent = 'Informe o setor do colaborador.';
+      msgErro.classList.add('visivel');
+      return;
+    }
+    if (modo === 'completo') {
+      if (!email_prefixo) {
+        msgErro.textContent = 'Informe o e-mail institucional do colaborador.';
+        msgErro.classList.add('visivel');
+        return;
+      }
+      if (!senha || senha.length < 6) {
+        msgErro.textContent = 'A senha inicial deve ter no mínimo 6 caracteres.';
+        msgErro.classList.add('visivel');
+        return;
+      }
+    }
+
+    btnConfirmar.disabled = true;
+    btnConfirmar.textContent = 'Cadastrando…';
+
+    try {
+      const { data: resultado, error } = await supabaseClient.functions.invoke('admin-cadastrar-colaborador', {
+        body: {
+          modo,
+          re: Number(reValorBruto),
+          nome_completo,
+          cargo,
+          setor,
+          departamento_nome,
+          email_prefixo,
+          senha,
+        },
+      });
+
+      if (error) throw error;
+
+      fecharModal(document.getElementById('modal-cadastrar-colaborador'));
+
+      if (modo === 'completo') {
+        mostrarToast(`${nome_completo} cadastrado com acesso completo.`, 'sucesso');
+        abrirModalSenhaGerada(
+          senha,
+          `Conta criada para ${resultado.email}. Informe esta senha ao colaborador — ele deverá trocá-la no primeiro acesso.`
+        );
+        // Recarrega a lista para trazer o novo colaborador (aparecerá como
+        // "Pendente", já com setor/RE preenchidos, até o 1º login.
+        await carregarTudo();
+      } else {
+        mostrarToast(`${nome_completo} adicionado à base de referência (RE ${resultado.re}). Ele já pode se cadastrar na tela de login.`, 'sucesso');
+      }
+    } catch (err) {
+      msgErro.textContent = 'Erro ao cadastrar: ' + (err.message || 'falha inesperada.');
+      msgErro.classList.add('visivel');
+    } finally {
+      btnConfirmar.disabled = false;
+      btnConfirmar.textContent = modo === 'completo' ? 'Cadastrar e criar acesso' : 'Cadastrar na base de referência';
+    }
+  });
+}
+
+// =========================================================
+// Lista dedicada: e-mails aguardando 1º acesso
+// =========================================================
 // Visão focada e profissional, separada da tabela principal, feita
 // especificamente para responder "quais e-mails ainda faltam entrar
 // pela primeira vez". Usa a mesma fonte de verdade do badge (ultimo_login
@@ -1286,6 +1537,7 @@ function exportarEmailsPendentesCSV() {
 // =========================================================
 function configurarModais() {
   configurarModalDefinirSenha();
+  configurarModalCadastro();
 
   document.getElementById('busca-emails-pendentes')?.addEventListener('input', debounce((e) => {
     renderizarListaEmailsPendentes(e.target.value);

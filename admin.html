@@ -87,6 +87,7 @@
         <select id="filtro-setor" class="admin-select" aria-label="Filtrar por setor">
           <option value="todos">Todos os setores</option>
         </select>
+        <button id="btn-cadastrar-colaborador" class="btn" type="button">+ Cadastrar colaborador</button>
         <button id="btn-emails-pendentes" class="btn btn-secundario" type="button">📋 E-mails pendentes</button>
         <span class="admin-contagem" id="contagem-colaboradores"></span>
       </div>
@@ -266,13 +267,101 @@
     </div>
   </div>
 
+  <!-- Modal de Cadastro de Colaborador — alterna entre dois modos:
+       "Base de Referência" (azul, apenas cadastra RE/nome/cargo/setor
+       para o colaborador se auto-cadastrar depois) e "Acesso Completo"
+       (vermelho, também cria a conta de login com e-mail e senha
+       inicial). -->
+  <div class="admin-overlay" id="modal-cadastrar-colaborador">
+    <div class="admin-modal">
+      <div class="admin-modal-header">
+        <h3>Cadastrar Colaborador</h3>
+        <button class="admin-modal-fechar" data-fechar aria-label="Fechar">&times;</button>
+      </div>
+
+      <div class="admin-modo-toggle" id="cadastro-modo-toggle" role="tablist" aria-label="Modo de cadastro">
+        <button type="button" class="admin-modo-opcao admin-modo-azul ativo" id="btn-modo-referencia" data-modo="referencia" role="tab" aria-selected="true">
+          <span class="admin-modo-titulo">Base de Referência</span>
+          <span class="admin-modo-desc">Só cadastra RE, cargo e setor. O colaborador cria a própria conta na tela de login.</span>
+        </button>
+        <button type="button" class="admin-modo-opcao admin-modo-vermelho" id="btn-modo-completo" data-modo="completo" role="tab" aria-selected="false">
+          <span class="admin-modo-titulo">Acesso Completo</span>
+          <span class="admin-modo-desc">Cadastra tudo acima e já cria e-mail + senha inicial, pronto para logar.</span>
+        </button>
+      </div>
+
+      <form id="form-cadastrar-colaborador">
+        <input type="hidden" id="cadastro-modo" value="referencia">
+
+        <div class="campo">
+          <label for="cadastro-nome">Nome completo</label>
+          <input type="text" id="cadastro-nome" required placeholder="Ex: Maria da Silva Souza">
+        </div>
+
+        <div class="admin-campo-grid-2">
+          <div class="campo">
+            <label for="cadastro-re">RE (matrícula)</label>
+            <input type="number" id="cadastro-re" min="1" step="1" inputmode="numeric" required placeholder="Ex: 12345">
+          </div>
+          <div class="campo">
+            <label for="cadastro-cargo">Cargo</label>
+            <input type="text" id="cadastro-cargo" required placeholder="Ex: Analista de TI">
+          </div>
+        </div>
+
+        <div class="admin-campo-grid-2">
+          <div class="campo">
+            <label for="cadastro-setor">Setor</label>
+            <input type="text" id="cadastro-setor" list="lista-setores" required placeholder="Ex: Tecnologia e Informação">
+          </div>
+          <div class="campo">
+            <label for="cadastro-departamento">Departamento <span class="admin-campo-opcional">(opcional)</span></label>
+            <input type="text" id="cadastro-departamento" list="lista-departamentos" placeholder="Deixe em branco se não souber">
+            <datalist id="lista-departamentos">
+              <option value="DIRETORIA GERAL"></option>
+              <option value="DIRETORIA TECNICA"></option>
+              <option value="DIRETORIA ADM FINANCEIRA"></option>
+              <option value="DIRETORIA DE ENFERMAGEM"></option>
+            </datalist>
+          </div>
+        </div>
+
+        <!-- Campos exclusivos do modo "Acesso Completo" -->
+        <div id="cadastro-campos-acesso" class="admin-campos-condicionais" hidden>
+          <div class="campo">
+            <label for="cadastro-email">E-mail institucional</label>
+            <div class="email-field-group">
+              <input id="cadastro-email" class="email-input" type="text" placeholder="nome.sobrenome">
+              <span class="email-suffix">@hemc.fuabc.org.br</span>
+            </div>
+          </div>
+          <div class="campo">
+            <label for="cadastro-senha">Senha inicial</label>
+            <div class="admin-senha-input-wrap">
+              <input type="text" id="cadastro-senha" minlength="6" maxlength="72" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+              <button type="button" class="btn-copiar" id="btn-gerar-senha-cadastro" title="Gerar sugestão aleatória">Gerar</button>
+            </div>
+            <span class="admin-campo-ajuda">O colaborador deverá trocar essa senha no primeiro acesso.</span>
+          </div>
+        </div>
+
+        <div id="msg-erro-cadastro" class="mensagem-erro"></div>
+
+        <div class="admin-modal-acoes">
+          <button type="submit" class="btn" id="btn-confirmar-cadastro">Cadastrar na base de referência</button>
+          <button type="button" class="btn btn-secundario" data-fechar>Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="admin-overlay" id="modal-senha-gerada">
     <div class="admin-modal admin-modal-pequeno">
       <div class="admin-modal-header">
         <h3>Senha redefinida</h3>
         <button class="admin-modal-fechar" data-fechar aria-label="Fechar">&times;</button>
       </div>
-      <p class="admin-modal-texto">Informe esta senha ao colaborador. Ele deverá trocá-la no próximo acesso.</p>
+      <p class="admin-modal-texto" id="senha-gerada-texto">Informe esta senha ao colaborador. Ele deverá trocá-la no próximo acesso.</p>
       <div class="admin-senha-gerada-wrap">
         <div class="admin-senha-gerada" id="texto-senha-gerada">-</div>
         <button class="btn-copiar" id="btn-copiar-senha" title="Copiar senha" type="button">Copiar</button>
