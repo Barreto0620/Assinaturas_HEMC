@@ -155,6 +155,127 @@
     .modal-redefinir-senha .acoes-modal {
       margin-top: 8px;
     }
+
+    /* =========================================================
+       Botão de ajuda ao lado do rótulo "Cargo" + popover explicativo
+       ========================================================= */
+    .campo-cargo .rotulo-com-ajuda {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .campo-cargo .rotulo-com-ajuda label {
+      margin-bottom: 0;
+    }
+
+    .btn-ajuda-cargo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      border-radius: 50%;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      background: transparent;
+      color: rgba(148, 163, 184, 0.9);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0;
+      transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+    }
+    .btn-ajuda-cargo:hover,
+    .btn-ajuda-cargo:focus-visible {
+      border-color: #4f6df5;
+      color: #4f6df5;
+      background: rgba(79, 109, 245, 0.08);
+      outline: none;
+    }
+    .btn-ajuda-cargo[aria-expanded="true"] {
+      border-color: #4f6df5;
+      color: #4f6df5;
+      background: rgba(79, 109, 245, 0.12);
+    }
+
+    .popover-ajuda-cargo {
+      position: absolute;
+      z-index: 50;
+      width: 280px;
+      max-width: calc(100vw - 40px);
+      margin-top: 10px;
+      padding: 14px 16px;
+      border-radius: 10px;
+      background: #1c1f2e;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+      opacity: 0;
+      transform: translateY(-4px);
+      pointer-events: none;
+      transition: opacity 0.15s ease, transform 0.15s ease;
+    }
+    .popover-ajuda-cargo.visivel {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    .popover-ajuda-cargo::before {
+      content: '';
+      position: absolute;
+      top: -6px;
+      left: 18px;
+      width: 12px;
+      height: 12px;
+      background: #1c1f2e;
+      border-left: 1px solid rgba(148, 163, 184, 0.25);
+      border-top: 1px solid rgba(148, 163, 184, 0.25);
+      transform: rotate(45deg);
+    }
+    .popover-ajuda-cargo p {
+      margin: 0 0 12px 0;
+      font-size: 12.5px;
+      line-height: 1.55;
+      color: #cbd3e6;
+    }
+    .popover-ajuda-cargo p:last-of-type {
+      margin-bottom: 14px;
+    }
+    .link-abrir-chamado {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+      justify-content: center;
+      padding: 9px 12px;
+      border-radius: 8px;
+      background: #4f6df5;
+      color: #ffffff;
+      font-size: 12.5px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background-color 0.15s ease;
+    }
+    .link-abrir-chamado:hover {
+      background: #3d5adf;
+    }
+    .link-abrir-chamado svg {
+      flex-shrink: 0;
+    }
+
+    [data-theme="light"] .popover-ajuda-cargo {
+      background: #ffffff;
+      border-color: #e2e5ec;
+      box-shadow: 0 12px 32px rgba(20, 24, 40, 0.12);
+    }
+    [data-theme="light"] .popover-ajuda-cargo::before {
+      background: #ffffff;
+      border-color: #e2e5ec;
+    }
+    [data-theme="light"] .popover-ajuda-cargo p {
+      color: #4a4f63;
+    }
   </style>
 </head>
 
@@ -210,9 +331,25 @@
           <input id="senha" type="password" required minlength="6" placeholder="••••••••">
         </div>
 
-        <div class="campo campo-cargo">
-          <label for="cargo">Cargo</label>
+        <div class="campo campo-cargo" style="position: relative;">
+          <div class="rotulo-com-ajuda">
+            <label for="cargo">Cargo</label>
+            <button type="button" class="btn-ajuda-cargo" id="btn-ajuda-cargo" aria-expanded="false" aria-controls="popover-ajuda-cargo" aria-label="Ajuda sobre o campo Cargo">?</button>
+          </div>
           <input id="cargo" type="text" required readonly placeholder="Ex: Analista de TI">
+
+          <div class="popover-ajuda-cargo" id="popover-ajuda-cargo" role="tooltip">
+            <p>Este cargo é preenchido automaticamente com base no seu cadastro institucional.</p>
+            <p>Se as informações exibidas estiverem incorretas, abra um chamado no GLPI para que o setor responsável faça a correção.</p>
+            <a class="link-abrir-chamado" href="http://chamados.fuabc.local/glpi" target="_blank" rel="noopener noreferrer">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 3H3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-3"></path>
+                <path d="M10 2h4v4"></path>
+                <path d="M14 2 7 9"></path>
+              </svg>
+              Abrir chamado no GLPI
+            </a>
+          </div>
         </div>
 
         <div class="campo campo-ramal">
@@ -347,6 +484,50 @@
       if (inputEmail) {
         inputEmail.addEventListener("input", (e) => {
           e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9\.\-\_]/g, "");
+        });
+      }
+
+      // -------------------------------------------------------------
+      // ❓ Popover de ajuda do campo Cargo — explica de onde vem a
+      // informação e oferece um atalho para abrir chamado no GLPI caso
+      // o colaborador identifique um cargo incorreto.
+      // -------------------------------------------------------------
+      const btnAjudaCargo = document.getElementById("btn-ajuda-cargo");
+      const popoverAjudaCargo = document.getElementById("popover-ajuda-cargo");
+
+      function abrirPopoverAjudaCargo() {
+        popoverAjudaCargo.classList.add("visivel");
+        btnAjudaCargo.setAttribute("aria-expanded", "true");
+      }
+
+      function fecharPopoverAjudaCargo() {
+        popoverAjudaCargo.classList.remove("visivel");
+        btnAjudaCargo.setAttribute("aria-expanded", "false");
+      }
+
+      if (btnAjudaCargo && popoverAjudaCargo) {
+        btnAjudaCargo.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const estaAberto = popoverAjudaCargo.classList.contains("visivel");
+          if (estaAberto) {
+            fecharPopoverAjudaCargo();
+          } else {
+            abrirPopoverAjudaCargo();
+          }
+        });
+
+        // Fecha ao clicar fora do popover/botão
+        document.addEventListener("click", (e) => {
+          if (!popoverAjudaCargo.contains(e.target) && e.target !== btnAjudaCargo) {
+            fecharPopoverAjudaCargo();
+          }
+        });
+
+        // Fecha com a tecla Esc
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") {
+            fecharPopoverAjudaCargo();
+          }
         });
       }
     });
