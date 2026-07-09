@@ -276,6 +276,108 @@
     [data-theme="light"] .popover-ajuda-cargo p {
       color: #4a4f63;
     }
+
+    /* =========================================================
+       Banner de consentimento — cache local e armazenamento de dados
+       ========================================================= */
+    .banner-consentimento {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 2000;
+      display: flex;
+      justify-content: center;
+      padding: 16px;
+      transform: translateY(120%);
+      transition: transform 0.35s ease;
+    }
+    .banner-consentimento.visivel {
+      transform: translateY(0);
+    }
+    .banner-consentimento-caixa {
+      width: 100%;
+      max-width: 760px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      background: #1c1f2e;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 12px;
+      padding: 16px 20px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+    }
+    .banner-consentimento-icone {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(79, 109, 245, 0.12);
+      color: #4f6df5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .banner-consentimento-texto {
+      flex: 1;
+      min-width: 0;
+    }
+    .banner-consentimento-texto p {
+      margin: 0;
+      font-size: 12.5px;
+      line-height: 1.55;
+      color: #cbd3e6;
+    }
+    .banner-consentimento-texto strong {
+      color: #f1f5f9;
+    }
+    .banner-consentimento-acoes {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn-aceitar-consentimento {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      background: #4f6df5;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background-color 0.15s ease;
+    }
+    .btn-aceitar-consentimento:hover {
+      background: #3d5adf;
+    }
+
+    @media (max-width: 640px) {
+      .banner-consentimento-caixa {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+      }
+      .banner-consentimento-acoes {
+        width: 100%;
+      }
+      .btn-aceitar-consentimento {
+        width: 100%;
+      }
+    }
+
+    [data-theme="light"] .banner-consentimento-caixa {
+      background: #ffffff;
+      border-color: #e2e5ec;
+      box-shadow: 0 16px 40px rgba(20, 24, 40, 0.14);
+    }
+    [data-theme="light"] .banner-consentimento-texto p {
+      color: #4a4f63;
+    }
+    [data-theme="light"] .banner-consentimento-texto strong {
+      color: #1a1a2e;
+    }
   </style>
 </head>
 
@@ -387,6 +489,25 @@
         <span class="name-dev">Gabriel Barreto</span>
       </div>
     </a>
+  </div>
+
+  <!-- Banner de Consentimento — cache local e armazenamento de dados -->
+  <div class="banner-consentimento" id="banner-consentimento" role="dialog" aria-live="polite" aria-label="Aviso de armazenamento de dados">
+    <div class="banner-consentimento-caixa">
+      <div class="banner-consentimento-icone" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+          <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+          <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+        </svg>
+      </div>
+      <div class="banner-consentimento-texto">
+        <p>Este sistema utiliza <strong>armazenamento local (cache)</strong> no seu navegador para lembrar preferências como o tema claro/escuro, e processa e armazena seus <strong>dados institucionais</strong> (nome, cargo, setor, e-mail e ramal) para autenticação e geração da sua assinatura. Ao continuar, você concorda com esse uso.</p>
+      </div>
+      <div class="banner-consentimento-acoes">
+        <button type="button" class="btn-aceitar-consentimento" id="btn-aceitar-consentimento">Aceitar e continuar</button>
+      </div>
+    </div>
   </div>
 
   <!-- Modal: Redefinição Obrigatória de Senha (Primeiro Acesso) -->
@@ -528,6 +649,44 @@
           if (e.key === "Escape") {
             fecharPopoverAjudaCargo();
           }
+        });
+      }
+
+      // -------------------------------------------------------------
+      // 🍪 Banner de consentimento — cache local e armazenamento de dados
+      // Mostrado uma única vez por navegador. A escolha fica salva em
+      // localStorage, então não aparece de novo depois que a pessoa aceita.
+      // -------------------------------------------------------------
+      const CHAVE_CONSENTIMENTO = "hemc-consentimento-dados";
+      const bannerConsentimento = document.getElementById("banner-consentimento");
+      const btnAceitarConsentimento = document.getElementById("btn-aceitar-consentimento");
+
+      function jaConsentiu() {
+        try {
+          return localStorage.getItem(CHAVE_CONSENTIMENTO) === "aceito";
+        } catch (e) {
+          // Sem acesso a localStorage (modo privado restrito, por exemplo):
+          // não há como lembrar a escolha, então não insiste no banner.
+          return true;
+        }
+      }
+
+      function registrarConsentimento() {
+        try {
+          localStorage.setItem(CHAVE_CONSENTIMENTO, "aceito");
+        } catch (e) {
+          /* ignora — pior caso, o banner pode reaparecer na próxima visita */
+        }
+      }
+
+      if (bannerConsentimento && btnAceitarConsentimento && !jaConsentiu()) {
+        // Pequeno atraso para o banner entrar com a transição de subida,
+        // em vez de aparecer instantaneamente "colado" na tela.
+        setTimeout(() => bannerConsentimento.classList.add("visivel"), 300);
+
+        btnAceitarConsentimento.addEventListener("click", () => {
+          registrarConsentimento();
+          bannerConsentimento.classList.remove("visivel");
         });
       }
     });

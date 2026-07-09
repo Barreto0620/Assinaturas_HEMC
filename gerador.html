@@ -108,6 +108,149 @@
         box-shadow: none;
       }
     }
+
+    /* =========================================================
+       Tour interativo de primeiro acesso
+       ========================================================= */
+    .tour-spotlight {
+      position: fixed;
+      border-radius: 10px;
+      box-shadow: 0 0 0 9999px rgba(10, 14, 26, 0.68);
+      pointer-events: none;
+      z-index: 9991;
+      transition: top 0.35s ease, left 0.35s ease, width 0.35s ease, height 0.35s ease, opacity 0.2s ease;
+      opacity: 0;
+    }
+    .tour-spotlight.tour-ativo {
+      opacity: 1;
+    }
+    .tour-spotlight.tour-sem-alvo {
+      box-shadow: 0 0 0 9999px rgba(10, 14, 26, 0.68);
+    }
+
+    .tour-tooltip {
+      position: fixed;
+      z-index: 9992;
+      width: 300px;
+      max-width: calc(100vw - 32px);
+      background: var(--assina-surface, #161a27);
+      border: 1px solid var(--assina-border, rgba(148, 163, 184, 0.25));
+      border-radius: 12px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+      padding: 16px 18px;
+      opacity: 0;
+      transform: translateY(6px);
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease, top 0.35s ease, left 0.35s ease;
+    }
+    .tour-tooltip.tour-ativo {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    .tour-tooltip.tour-centralizado {
+      position: fixed;
+      top: 50% !important;
+      left: 50% !important;
+      transform: translate(-50%, -50%);
+      width: 340px;
+    }
+    .tour-tooltip.tour-centralizado.tour-ativo {
+      transform: translate(-50%, -50%);
+    }
+
+    .tour-tooltip-passo {
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--assina-blue-400, #6f8cff);
+      margin-bottom: 6px;
+    }
+    .tour-tooltip-titulo {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--assina-text, #f1f5f9);
+      margin: 0 0 8px 0;
+    }
+    .tour-tooltip-texto {
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--assina-text-muted, #97a1b8);
+      margin: 0 0 16px 0;
+    }
+
+    .tour-tooltip-rodape {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .tour-dots {
+      display: flex;
+      gap: 5px;
+    }
+    .tour-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--assina-border, rgba(148, 163, 184, 0.35));
+      transition: background-color 0.2s ease, transform 0.2s ease;
+    }
+    .tour-dot.tour-dot-ativo {
+      background: var(--assina-blue-500, #4f6df5);
+      transform: scale(1.3);
+    }
+
+    .tour-tooltip-botoes {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tour-btn {
+      border: none;
+      border-radius: 7px;
+      padding: 7px 13px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.15s ease, opacity 0.15s ease;
+    }
+    .tour-btn-primario {
+      background: var(--assina-blue-500, #4f6df5);
+      color: #fff;
+    }
+    .tour-btn-primario:hover {
+      background: #3d5adf;
+    }
+    .tour-btn-texto {
+      background: none;
+      color: var(--assina-text-muted, #97a1b8);
+      padding: 7px 8px;
+    }
+    .tour-btn-texto:hover {
+      color: var(--assina-text, #f1f5f9);
+    }
+
+    .tour-pular {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      background: none;
+      border: none;
+      font-size: 11.5px;
+      color: var(--assina-text-muted, #97a1b8);
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    .tour-pular:hover {
+      color: var(--assina-text, #f1f5f9);
+    }
+
+    [data-theme="light"] .tour-spotlight {
+      box-shadow: 0 0 0 9999px rgba(30, 41, 59, 0.45);
+    }
   </style>
 </head>
 
