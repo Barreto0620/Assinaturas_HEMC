@@ -43,28 +43,59 @@
     .mensagem-erro, .mensagem-sucesso { order: 7; }
 
     /* =========================================================
-       Protetor Logo institucional — canto superior esquerdo
+       Marca institucional — canto superior esquerdo, sobre a foto
        ========================================================= */
     .logo-institucional {
       position: fixed;
-      top: 20px;
-      left: 20px;
+      top: 24px;
+      left: 24px;
       z-index: 100;
       display: flex;
       align-items: center;
+      gap: 12px;
+      background: rgba(5, 8, 15, 0.4);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 8px 16px 8px 8px;
     }
     .logo-institucional img {
-      height: 72px;
+      height: 40px;
       width: auto;
       display: block;
+      border-radius: 6px;
+    }
+    .logo-institucional .marca-texto {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.2;
+    }
+    .logo-institucional .marca-titulo {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      color: #ffffff;
+      text-transform: uppercase;
+    }
+    .logo-institucional .marca-subtitulo {
+      font-size: 10.5px;
+      color: rgba(255, 255, 255, 0.72);
     }
     @media (max-width: 600px) {
       .logo-institucional {
         top: 12px;
         left: 12px;
+        padding: 6px 12px 6px 6px;
       }
       .logo-institucional img {
-        height: 52px;
+        height: 32px;
+      }
+      .logo-institucional .marca-titulo {
+        font-size: 11.5px;
+      }
+      .logo-institucional .marca-subtitulo {
+        display: none;
       }
     }
 
@@ -383,12 +414,16 @@
 
 <body>
 
-  <!-- Logo Institucional -->
-  <div class="logo-institucional">
-    <img src="img/logo_assina.png" alt="Logo Hospital Estadual Mário Covas">
-  </div>
-
   <div class="login-wrapper">
+
+    <!-- Marca Institucional — canto superior esquerdo, sobre a imagem -->
+    <div class="logo-institucional">
+      <img src="img/logo_assina.png" alt="Logo Hospital Estadual Mário Covas">
+      <div class="marca-texto">
+        <span class="marca-titulo">HEMC · Assina.ai</span>
+        <span class="marca-subtitulo">Hospital Estadual Mário Covas</span>
+      </div>
+    </div>
 
     <!-- Alternador de Tema Sincronizado -->
     <button type="button" class="login-theme-toggle" id="btn-tema-login" aria-label="Alternar tema claro/escuro">
@@ -410,8 +445,19 @@
 
     <!-- Card de Autenticação -->
     <div class="login-card">
-      <h1 id="titulo-form">Entrar</h1>
-      <p class="subtitulo" id="subtitulo-form">Acesse e valide seus dados institucionais</p>
+
+      <div class="login-card-header">
+        <span class="login-card-badge" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2 4 5v6c0 5.25 3.4 9.74 8 11 4.6-1.26 8-5.75 8-11V5l-8-3z"></path>
+            <path d="m9.5 12 1.8 1.8L15 10"></path>
+          </svg>
+        </span>
+        <div>
+          <h1 id="titulo-form">Acesse sua conta</h1>
+          <p class="subtitulo" id="subtitulo-form">Entre com seus dados institucionais para continuar</p>
+        </div>
+      </div>
 
       <form id="form-auth">
 
@@ -475,6 +521,18 @@
         <div id="msg-erro" class="mensagem-erro"></div>
         <div id="msg-sucesso" class="mensagem-sucesso"></div>
       </form>
+
+      <!-- Selos de confiança -->
+      <div class="login-trust-row">
+        <span class="login-trust-item">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+          Conexão segura (SSL)
+        </span>
+        <span class="login-trust-item">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+          Conforme a LGPD
+        </span>
+      </div>
     </div>
 
     <!-- Floating Developer Portfolio Badge -->

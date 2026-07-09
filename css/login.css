@@ -74,43 +74,37 @@
 }
 
 /* =========================================================
-   Layout Geral e Elementos Posicionados Externamente
+   Layout Geral — Imagem Full-Bleed + Card Flutuante
    ========================================================= */
 .login-wrapper {
+  position: relative;
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
   align-items: center;
   min-height: 100vh;
-  padding: 20px;
-  background: var(--bg-gradient);
-  position: relative;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  transition: background 0.3s ease;
+  width: 100%;  
+  padding: 40px 72px;
   box-sizing: border-box;
+  background-color: #05070c;
+  background-image:
+    linear-gradient(90deg, rgba(4, 6, 12, 0.05) 0%, rgba(4, 6, 12, 0.35) 55%, rgba(4, 6, 12, 0.75) 100%),
+    url('../img/background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  transition: background-color 0.3s ease;
 }
 
-/* Logo na lateral superior esquerda fora do card */
-.login-logo {
-  position: absolute;
-  top: 24px;
-  left: 24px;
-  max-width: 150px;
-  height: auto;
-  object-fit: contain;
-  background: #ffffff; /* Mantém contraste isolado da marca em qualquer fundo */
-  padding: 6px 12px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-}
-
-/* Botão de alternar tema na lateral superior direita */
+/* Botão de alternar tema — fixo no canto superior direito da viewport */
 .login-theme-toggle {
-  position: absolute;
+  position: fixed;
   top: 24px;
   right: 24px;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  color: var(--text-primary);
+  background: rgba(5, 8, 15, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -118,14 +112,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--card-shadow);
   transition: all 0.2s ease;
   padding: 0;
+  z-index: 110;
 }
 
 .login-theme-toggle:hover {
   transform: scale(1.05);
-  border-color: #0072c6;
+  border-color: rgba(255, 255, 255, 0.35);
 }
 
 .login-theme-toggle svg {
@@ -133,33 +127,105 @@
 }
 
 /* =========================================================
-   Componente Card Central de Login
+   Componente Card Flutuante de Login — vidro fosco sobre a foto
    ========================================================= */
 .login-card {
-  background: var(--card-bg);
+  background: rgba(13, 17, 28, 0.82);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
   width: 100%;
-  max-width: 420px;
-  padding: 35px 32px;
-  border-radius: 16px;
-  box-shadow: var(--card-shadow);
-  border: 1px solid var(--card-border);
-  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  max-width: 440px;
+  padding: 40px 36px;
+  border-radius: 24px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
   z-index: 10;
 }
 
-.login-card h1 {
-  font-size: 22px;
-  font-weight: 700;
-  margin: 0 0 6px 0;
-  color: var(--text-title);
-  text-align: center;
+[data-theme="light"] .login-card {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.25), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
 }
 
-.login-card .subtitulo {
-  font-size: 13.5px;
+.login-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 26px;
+}
+
+.login-card-badge {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(79, 109, 245, 0.16);
+  color: #6f8cff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+[data-theme="light"] .login-card-badge {
+  background: rgba(0, 114, 198, 0.1);
+  color: #0072c6;
+}
+
+.login-card-header h1 {
+  font-size: 21px;
+  font-weight: 800;
+  margin: 0 0 4px 0;
+  color: var(--text-title);
+  text-align: left;
+}
+
+.login-card-header .subtitulo {
+  font-size: 13px;
   color: var(--text-muted);
-  margin-bottom: 24px;
-  text-align: center;
+  margin: 0;
+  text-align: left;
+}
+
+/* =========================================================
+   Selos de confiança — rodapé do card
+   ========================================================= */
+.login-trust-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.login-trust-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.login-trust-item svg {
+  color: #2e9d5c;
+  flex-shrink: 0;
+}
+
+/* =========================================================
+   Responsividade Mobile — card ocupa a largura, sem imagem visível
+   ========================================================= */
+@media (max-width: 900px) {
+  .login-wrapper {
+    justify-content: center;
+    padding: 24px;
+    background-image:
+      linear-gradient(180deg, rgba(4, 6, 12, 0.55) 0%, rgba(4, 6, 12, 0.85) 100%),
+      url('../img/login-hero.jpg');
+  }
 }
 
 /* =========================================================
@@ -358,23 +424,9 @@
    ========================================================= */
 @media (max-width: 640px) {
   .login-wrapper {
-    flex-direction: column;
-    justify-content: flex-start;
+    justify-content: center;
+    padding: 16px;
     padding-top: 90px;
-  }
-  .login-logo {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    max-width: 120px;
-    padding: 4px 8px;
-  }
-  .login-theme-toggle {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    width: 36px;
-    height: 36px;
   }
   .developer-badge {
     position: static;
