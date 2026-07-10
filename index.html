@@ -618,7 +618,82 @@
     </div>
   </div>
 
-  <script src="js/video-intro.js"></script>
+  <script>
+    // =========================================================
+    // Vídeo de abertura — lógica inline (sem depender de arquivo
+    // externo). Isso elimina qualquer risco de 404 no deploy travar
+    // a intro (o que já aconteceu quando js/video-intro.js não foi
+    // publicado corretamente). Também inclui um timer de segurança:
+    // se por qualquer motivo o vídeo não disparar "ended" (arquivo
+    // corrompido, autoplay preso, etc.), a intro se fecha sozinha.
+    // =========================================================
+    (function () {
+      const CHAVE_ARMAZENAMENTO = "hemc-intro-assistido";
+      const ATRASO_BOTAO_MS = 1200;
+      const DURACAO_FADE_MS = 500;
+      const TIMEOUT_SEGURANCA_MS = 20000;
+
+      function jaAssistiu() {
+        try {
+          return localStorage.getItem(CHAVE_ARMAZENAMENTO) === "1";
+        } catch (e) {
+          return false;
+        }
+      }
+
+      function marcarComoAssistido() {
+        try {
+          localStorage.setItem(CHAVE_ARMAZENAMENTO, "1");
+        } catch (e) {}
+      }
+
+      if (jaAssistiu()) return;
+
+      const overlay = document.getElementById("intro-video-overlay");
+      const video = document.getElementById("intro-video");
+      const btnPular = document.getElementById("intro-video-skip");
+
+      if (!overlay || !video || !btnPular) return;
+
+      document.body.style.overflow = "hidden";
+
+      const timeoutBotao = setTimeout(() => {
+        btnPular.classList.add("intro-skip-visivel");
+      }, ATRASO_BOTAO_MS);
+
+      let encerrado = false;
+
+      function encerrarIntro() {
+        if (encerrado) return;
+        encerrado = true;
+
+        clearTimeout(timeoutBotao);
+        clearTimeout(timeoutSeguranca);
+        marcarComoAssistido();
+
+        overlay.classList.add("intro-saindo");
+        document.body.style.overflow = "";
+
+        setTimeout(() => {
+          overlay.remove();
+        }, DURACAO_FADE_MS);
+      }
+
+      // Timer de segurança: garante que a intro NUNCA prenda o usuário,
+      // independentemente do que aconteça com o vídeo.
+      const timeoutSeguranca = setTimeout(encerrarIntro, TIMEOUT_SEGURANCA_MS);
+
+      btnPular.addEventListener("click", encerrarIntro);
+      video.addEventListener("ended", encerrarIntro);
+      video.addEventListener("error", encerrarIntro);
+
+      const promessaReproducao = video.play();
+      if (promessaReproducao && typeof promessaReproducao.catch === "function") {
+        promessaReproducao.catch(encerrarIntro);
+      }
+    })();
+  </script>
+
   <script type="module" src="js/auth.js"></script>
 
   <!-- Script Interno para controle de Tema e máscaras de validação -->
