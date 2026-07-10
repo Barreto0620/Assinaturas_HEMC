@@ -23,6 +23,14 @@
           document.documentElement.setAttribute('data-theme', temaSalvo);
         }
       } catch (e) {}
+
+      // 3. Vídeo de abertura — evita o flash do overlay para quem já
+      // assistiu (persistido em localStorage: uma vez só, para sempre).
+      try {
+        if (localStorage.getItem('hemc-intro-assistido') === '1') {
+          document.documentElement.classList.add('sem-intro');
+        }
+      } catch (e) {}
     })();
   </script>
 
@@ -414,6 +422,22 @@
 
 <body>
 
+  <!-- Vídeo de Abertura — tela cheia, autoplay mudo, com botão de pular.
+       Comportamento (sessão, fade, fallbacks) é todo controlado por
+       js/video-intro.js; aqui é só o markup estático. -->
+  <div class="intro-video-overlay" id="intro-video-overlay">
+    <video id="intro-video" autoplay muted playsinline preload="auto">
+      <source src="img/video_background.mp4" type="video/mp4">
+    </video>
+    <button type="button" class="intro-video-skip" id="intro-video-skip" aria-label="Pular vídeo de abertura">
+      Pular vídeo
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="5 4 15 12 5 20 5 4"></polygon>
+        <line x1="19" y1="5" x2="19" y2="19"></line>
+      </svg>
+    </button>
+  </div>
+
   <div class="login-wrapper">
 
     <!-- Marca Institucional — canto superior esquerdo, sobre a imagem -->
@@ -594,6 +618,7 @@
     </div>
   </div>
 
+  <script src="js/video-intro.js"></script>
   <script type="module" src="js/auth.js"></script>
 
   <!-- Script Interno para controle de Tema e máscaras de validação -->
