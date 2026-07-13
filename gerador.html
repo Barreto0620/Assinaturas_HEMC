@@ -5,7 +5,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gerador de Assinatura | HEMC</title>
-  <link rel="icon" type="image/x-icon" href="img/favicon.ico">
 
   <script>
     // Aplica o tema salvo antes da renderização, evitando "flash" de tema errado.
@@ -261,6 +260,43 @@
       color: var(--assina-blue-400, #6f8cff);
     }
 
+    /* Força a grade de cards de ajuda em 2 colunas fixas (2x2), em vez
+       do comportamento padrão de auto-fit que deixava 3 cards numa
+       linha e 1 sozinho na linha de baixo. */
+    .hemc-ajuda-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    @media (max-width: 560px) {
+      .hemc-ajuda-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .hemc-video-btn-icon.icone-mobile {
+      color: var(--assina-sucesso, #4fd48c);
+    }
+
+    /* Cards que são link externo (ex.: Mobile/IMAP) precisam de
+       position:relative para posicionar o ícone de "abre em outra aba"
+       no canto, e herdam a mesma aparência visual do <button>, já que a
+       classe .hemc-video-btn é compartilhada entre <button> e <a>. */
+    a.hemc-video-btn {
+      position: relative;
+      text-decoration: none;
+    }
+    .hemc-video-btn-externo {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      color: var(--assina-text-muted, #8993ab);
+      opacity: 0.6;
+    }
+    a.hemc-video-btn:hover .hemc-video-btn-externo {
+      opacity: 1;
+    }
+
     .hemc-video-placeholder {
       display: flex;
       flex-direction: column;
@@ -480,6 +516,27 @@
                 <span class="hemc-video-btn-desc">Baixa a lista de contatos institucionais</span>
               </span>
             </button>
+
+            <a class="hemc-video-btn" href="https://suporte.skynova.com.br/hc/pt-br/articles/360047156912-Configurar-Outlook-App-IMAP" target="_blank" rel="noopener noreferrer" id="btn-mobile-imap">
+              <span class="hemc-video-btn-icon icone-mobile">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="7" y="2" width="10" height="20" rx="2"></rect>
+                  <line x1="11" y1="18" x2="13" y2="18"></line>
+                </svg>
+              </span>
+              <span class="hemc-video-btn-texto">
+                <span class="hemc-video-btn-titulo">Mobile (IMAP)</span>
+                <span class="hemc-video-btn-desc">Guia oficial para configurar no celular</span>
+              </span>
+              <span class="hemc-video-btn-externo" aria-hidden="true">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+              </span>
+            </a>
           </div>
         </div>
 
@@ -577,10 +634,27 @@
         <button class="hemc-modal-fechar" data-fechar>&times;</button>
       </div>
       <div class="hemc-modal-body">
+        <!-- Placeholder enquanto o vídeo de apoio não existe. Assim que o
+             arquivo estiver disponível, troque este bloco por:
              <div class="hemc-video-wrap">
-               <video controls preload="metadata" src="img/catalogo_outlook.mp4">...</video>
-             </div>
-        
+               <video controls preload="metadata" src="img/CAMINHO_DO_VIDEO.mp4">...</video>
+             </div> -->
+        <div class="hemc-video-placeholder">
+          <span class="hemc-video-placeholder-icone">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+          </span>
+          <p><strong>Vídeo de apoio em produção.</strong> Em breve você vai encontrar aqui um passo a passo de como importar o catálogo no Outlook. Por enquanto, o download do arquivo já foi iniciado automaticamente.</p>
+          <div class="hemc-catalogo-confirmacao" id="catalogo-confirmacao">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 6 9 17l-5-5"></path>
+            </svg>
+            <span>catalogo_outlook.csv baixado com sucesso</span>
+          </div>
+        </div>
 
         <div class="hemc-aviso-glpi">
           <span class="hemc-aviso-glpi-icon">
