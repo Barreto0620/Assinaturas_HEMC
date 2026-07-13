@@ -260,20 +260,6 @@
       color: var(--assina-blue-400, #6f8cff);
     }
 
-    /* Força a grade de cards de ajuda em 2 colunas fixas (2x2), em vez
-       do comportamento padrão de auto-fit que deixava 3 cards numa
-       linha e 1 sozinho na linha de baixo. */
-    .hemc-ajuda-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-    }
-    @media (max-width: 560px) {
-      .hemc-ajuda-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
     .hemc-video-btn-icon.icone-mobile {
       color: var(--assina-sucesso, #4fd48c);
     }
