@@ -38,6 +38,24 @@
   <link rel="stylesheet" href="css/login.css">
 
   <style>
+    /* =========================================================
+       CORREÇÃO: Prevenir fundo branco do Autofill (Preenchimento Automático)
+       ========================================================= */
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover, 
+    input:-webkit-autofill:focus, 
+    input:-webkit-autofill:active {
+      transition: background-color 5000s ease-in-out 0s !important;
+      -webkit-text-fill-color: #cbd3e6 !important;
+    }
+
+    [data-theme="light"] input:-webkit-autofill,
+    [data-theme="light"] input:-webkit-autofill:hover, 
+    [data-theme="light"] input:-webkit-autofill:focus, 
+    [data-theme="light"] input:-webkit-autofill:active {
+      -webkit-text-fill-color: #1a1a2e !important;
+    }
+
     #form-auth {
       display: flex;
       flex-direction: column;

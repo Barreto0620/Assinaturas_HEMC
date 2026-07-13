@@ -251,6 +251,67 @@
     [data-theme="light"] .tour-spotlight {
       box-shadow: 0 0 0 9999px rgba(30, 41, 59, 0.45);
     }
+
+    /* =========================================================
+       Card "Catálogo Outlook" — ícone diferenciado (download) e
+       placeholder elegante no modal enquanto o vídeo não existe.
+       ========================================================= */
+    .hemc-video-btn-icon.icone-download {
+      color: var(--assina-blue-400, #6f8cff);
+    }
+
+    .hemc-video-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      min-height: 220px;
+      padding: 32px 24px;
+      border-radius: 12px;
+      background: var(--assina-bg-2, #0f1526);
+      border: 1px dashed var(--assina-border-strong, rgba(120, 160, 230, 0.28));
+      text-align: center;
+    }
+    .hemc-video-placeholder-icone {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(111, 140, 255, 0.12);
+      color: var(--assina-blue-400, #6f8cff);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .hemc-video-placeholder p {
+      margin: 0;
+      font-size: 13.5px;
+      line-height: 1.55;
+      color: var(--assina-text-muted, #8993ab);
+      max-width: 380px;
+    }
+    .hemc-video-placeholder strong {
+      color: var(--assina-text, #e7ebf5);
+    }
+
+    .hemc-catalogo-confirmacao {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--assina-sucesso, #4fd48c);
+      margin-top: 14px;
+      opacity: 0;
+      max-height: 0;
+      overflow: hidden;
+      transition: opacity 0.25s ease;
+    }
+    .hemc-catalogo-confirmacao.visivel {
+      opacity: 1;
+      max-height: 40px;
+    }
   </style>
 </head>
 
@@ -403,6 +464,21 @@
                 <span class="hemc-video-btn-desc">Vídeo tutorial passo a passo</span>
               </span>
             </button>
+
+            <button class="hemc-video-btn" data-modal="modal-catalogo" data-download="img/catalogo_outlook.csv" data-download-nome="catalogo_outlook.csv" id="btn-catalogo-outlook">
+              <span class="hemc-video-btn-icon icone-download">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 3v12"></path>
+                  <path d="m7 10 5 5 5-5"></path>
+                  <path d="M5 21h14"></path>
+                </svg>
+              </span>
+              <span class="hemc-video-btn-texto">
+                <span class="hemc-video-btn-titulo">Catálogo Outlook</span>
+                <span class="hemc-video-btn-desc">Baixa a lista de contatos institucionais</span>
+              </span>
+            </button>
           </div>
         </div>
 
@@ -492,6 +568,63 @@
     </div>
   </div>
 
+  <!-- ================= Modal: Catálogo Outlook ================= -->
+  <div class="hemc-overlay" id="modal-catalogo" aria-hidden="true">
+    <div class="hemc-modal" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-catalogo">
+      <div class="hemc-modal-header">
+        <h3 id="titulo-modal-catalogo">📇 Catálogo de Contatos para o Outlook</h3>
+        <button class="hemc-modal-fechar" data-fechar>&times;</button>
+      </div>
+      <div class="hemc-modal-body">
+        <!-- Placeholder enquanto o vídeo de apoio não existe. Assim que o
+             arquivo estiver disponível, troque este bloco por:
+             <div class="hemc-video-wrap">
+               <video controls preload="metadata" src="img/CAMINHO_DO_VIDEO.mp4">...</video>
+             </div> -->
+        <div class="hemc-video-placeholder">
+          <span class="hemc-video-placeholder-icone">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+          </span>
+          <p><strong>Vídeo de apoio em produção.</strong> Em breve você vai encontrar aqui um passo a passo de como importar o catálogo no Outlook. Por enquanto, o download do arquivo já foi iniciado automaticamente.</p>
+          <div class="hemc-catalogo-confirmacao" id="catalogo-confirmacao">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 6 9 17l-5-5"></path>
+            </svg>
+            <span>catalogo_outlook.csv baixado com sucesso</span>
+          </div>
+        </div>
+
+        <div class="hemc-aviso-glpi">
+          <span class="hemc-aviso-glpi-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
+              </path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+          </span>
+          <div class="hemc-aviso-glpi-texto">
+            <p>Teve algum problema ao importar o catálogo? <strong>Abra um chamado no GLPI</strong> e a equipe de TI vai te ajudar.</p>
+            <a class="hemc-btn-glpi" href="http://chamados.fuabc.local/glpi/front/central.php" target="_blank" rel="noopener noreferrer">
+              Abrir chamado no GLPI
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+              </svg>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 🚀 Sleek Floating Developer Portfolio Badge (GitHub Link) -->
   <a href="https://github.com/Barreto0620" target="_blank" rel="noopener noreferrer" class="developer-badge" title="Ver portfólio no GitHub">
     <div class="avatar-icon">
@@ -559,8 +692,37 @@
         document.body.style.overflow = '';
       }
 
+      // -------------------------------------------------------------
+      // 📥 Download automático — usada pelo card "Catálogo Outlook".
+      // Qualquer botão com data-download dispara o download do arquivo
+      // indicado, além de abrir o modal normalmente (via data-modal).
+      // -------------------------------------------------------------
+      function baixarArquivo(caminho, nomeArquivo) {
+        const link = document.createElement('a');
+        link.href = caminho;
+        if (nomeArquivo) link.download = nomeArquivo;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+
       botoesAbrir.forEach((btn) => {
-        btn.addEventListener('click', () => abrirModal(btn.dataset.modal));
+        btn.addEventListener('click', () => {
+          const caminhoDownload = btn.dataset.download;
+          if (caminhoDownload) {
+            baixarArquivo(caminhoDownload, btn.dataset.downloadNome);
+
+            // Mostra a confirmação "baixado com sucesso" dentro do modal,
+            // caso o modal alvo tenha esse elemento (é o caso do
+            // Catálogo Outlook).
+            const overlayAlvo = document.getElementById(btn.dataset.modal);
+            const confirmacao = overlayAlvo?.querySelector('.hemc-catalogo-confirmacao');
+            if (confirmacao) {
+              confirmacao.classList.add('visivel');
+            }
+          }
+          abrirModal(btn.dataset.modal);
+        });
       });
 
       overlays.forEach((overlay) => {
