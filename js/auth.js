@@ -486,10 +486,20 @@ function traduzirErro(erro) {
 // =========================================================
 // 8. Redirecionamento
 // =========================================================
+// Usa a transição de cortina (definida em index.html, exposta globalmente
+// como window.iniciarTransicaoCortina) quando disponível, para uma saída
+// visualmente elegante antes de navegar para o gerador. Se por qualquer
+// motivo essa função não existir na página, cai no comportamento simples
+// de antes — o redirecionamento em si NUNCA depende da animação.
+// =========================================================
 
 function redirecionar(destino = REDIRECT_URL, atraso = 900) {
   setTimeout(() => {
-    window.location.href = destino;
+    if (typeof window.iniciarTransicaoCortina === "function") {
+      window.iniciarTransicaoCortina(destino);
+    } else {
+      window.location.href = destino;
+    }
   }, atraso);
 }
 

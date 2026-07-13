@@ -417,6 +417,44 @@
     [data-theme="light"] .banner-consentimento-texto strong {
       color: #1a1a2e;
     }
+
+    /* =========================================================
+       Toast de confirmação — exibido após aceitar o consentimento
+       ========================================================= */
+    .toast-confirmacao {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      z-index: 2100;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: #16311f;
+      border: 1px solid rgba(46, 157, 92, 0.4);
+      color: #d8f5e3;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 12px 20px;
+      border-radius: 10px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+      opacity: 0;
+      transform: translate(-50%, -12px);
+      pointer-events: none;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    .toast-confirmacao.visivel {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+    .toast-confirmacao svg {
+      flex-shrink: 0;
+      color: #2e9d5c;
+    }
+    [data-theme="light"] .toast-confirmacao {
+      background: #eafaf0;
+      border-color: rgba(46, 157, 92, 0.3);
+      color: #1a5c34;
+    }
   </style>
 </head>
 
@@ -584,12 +622,45 @@
         </svg>
       </div>
       <div class="banner-consentimento-texto">
-        <p>Este sistema utiliza <strong>armazenamento local (cache)</strong> no seu navegador para lembrar preferências como o tema claro/escuro, e processa e armazena seus <strong>dados institucionais</strong> (nome, cargo, setor, e-mail e ramal) para autenticação e geração da sua assinatura. Ao continuar, você concorda com esse uso.</p>
+        <p><strong>Privacidade e uso de dados.</strong> Guardamos suas preferências (como tema claro/escuro) no armazenamento local do seu navegador, e seus dados institucionais — nome, cargo, setor, e-mail e ramal — são usados exclusivamente para autenticar seu acesso e gerar sua assinatura oficial. Ao continuar, você confirma estar ciente disso.</p>
       </div>
       <div class="banner-consentimento-acoes">
-        <button type="button" class="btn-aceitar-consentimento" id="btn-aceitar-consentimento">Aceitar e continuar</button>
+        <button type="button" class="btn-aceitar-consentimento" id="btn-aceitar-consentimento">Entendi e aceito</button>
       </div>
     </div>
+  </div>
+
+  <!-- Toast de confirmação — some sozinho após alguns segundos -->
+  <div class="toast-confirmacao" id="toast-confirmacao" role="status" aria-live="polite">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 6 9 17l-5-5"></path>
+    </svg>
+    <span id="toast-confirmacao-texto">Preferências salvas com sucesso.</span>
+  </div>
+
+  <!-- Transição "Cofre" — cadeado + chave, acionada por
+       window.iniciarTransicaoCortina() (script no fim da página;
+       chamada pelo auth.js após login bem-sucedido). -->
+  <div class="vault-transicao" id="vault-transicao" aria-hidden="true">
+    <div class="vault-fundo"></div>
+    <div class="vault-conteudo">
+      <div class="vault-cofre">
+        <svg class="vault-cadeado" width="84" height="88" viewBox="0 0 84 88" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="10" y="42" width="64" height="40" rx="9" fill="#16224a" stroke="#8fa4ff" stroke-width="3"/>
+          <path class="vault-argola" d="M22 42V30a20 20 0 0 1 40 0v12" stroke="#8fa4ff" stroke-width="6" fill="none" stroke-linecap="round"/>
+          <circle cx="42" cy="58" r="6" fill="#f5c451"/>
+          <rect x="39" y="60" width="6" height="12" rx="3" fill="#f5c451"/>
+        </svg>
+        <svg class="vault-chave" width="60" height="22" viewBox="0 0 60 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="10" cy="11" r="8" stroke="#f5c451" stroke-width="4" fill="none"/>
+          <line x1="18" y1="11" x2="52" y2="11" stroke="#f5c451" stroke-width="4" stroke-linecap="round"/>
+          <line x1="40" y1="11" x2="40" y2="18" stroke="#f5c451" stroke-width="4" stroke-linecap="round"/>
+          <line x1="48" y1="11" x2="48" y2="18" stroke="#f5c451" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <span class="vault-texto" id="vault-texto">Verificando credenciais...</span>
+    </div>
+    <div class="vault-flash"></div>
   </div>
 
   <!-- Modal: Redefinição Obrigatória de Senha (Primeiro Acesso) -->
@@ -845,9 +916,76 @@
         btnAceitarConsentimento.addEventListener("click", () => {
           registrarConsentimento();
           bannerConsentimento.classList.remove("visivel");
+          exibirToastConfirmacao("Preferências salvas com sucesso.");
         });
       }
+
+      // -------------------------------------------------------------
+      // ✅ Toast de confirmação — reaproveitável para qualquer feedback
+      // rápido (usado aqui após aceitar o consentimento).
+      // -------------------------------------------------------------
+      function exibirToastConfirmacao(mensagem) {
+        const toast = document.getElementById("toast-confirmacao");
+        const toastTexto = document.getElementById("toast-confirmacao-texto");
+        if (!toast || !toastTexto) return;
+
+        toastTexto.textContent = mensagem;
+        toast.classList.add("visivel");
+
+        setTimeout(() => {
+          toast.classList.remove("visivel");
+        }, 2800);
+      }
     });
+  </script>
+
+  <script>
+    // -------------------------------------------------------------
+    // 🔐 Transição "Cofre" — usada ao navegar para o gerador após
+    // login bem-sucedido (chamada pelo auth.js via redirecionar()).
+    // Mantém o nome "iniciarTransicaoCortina" por compatibilidade com
+    // o auth.js já publicado — só a animação por trás mudou.
+    //
+    // Sequência: chave desliza e gira → cadeado destrava com um flash
+    // de luz → a tela se abre em íris a partir do cadeado, revelando
+    // a página por trás → navega um instante antes da íris terminar
+    // de abrir, para minimizar o tempo em que a página atual fica
+    // visível por baixo (já que é uma navegação real entre páginas,
+    // não uma transição dentro do mesmo documento).
+    //
+    // Se o elemento não existir na página, cai direto no
+    // window.location.href — a animação é puramente estética e nunca
+    // pode travar o acesso ao sistema.
+    // -------------------------------------------------------------
+    window.iniciarTransicaoCortina = function (destino, atrasoTotal) {
+      const overlay = document.getElementById("vault-transicao");
+      const textoEl = document.getElementById("vault-texto");
+      const tempoTotal = typeof atrasoTotal === "number" ? atrasoTotal : 1950;
+
+      if (!overlay) {
+        window.location.href = destino;
+        return;
+      }
+
+      overlay.classList.add("vault-ativa");
+
+      setTimeout(() => {
+        overlay.classList.add("vault-girando");
+      }, 500);
+
+      setTimeout(() => {
+        overlay.classList.add("vault-aberta");
+        if (textoEl) textoEl.textContent = "Acesso autorizado";
+      }, 900);
+
+      setTimeout(() => {
+        overlay.classList.add("vault-revelando");
+      }, 1300);
+
+      setTimeout(() => {
+        window.location.href = destino;
+      }, tempoTotal);
+    };
   </script>
 </body>
 

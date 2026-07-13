@@ -82,6 +82,120 @@ html.sem-intro .intro-video-overlay {
 }
 
 /* =========================================================
+   Transição "Cofre" — chave gira, cadeado destrava com um flash
+   de luz, e a tela se abre em íris (círculo) a partir do próprio
+   cadeado, revelando a página por trás antes de navegar para o
+   gerador. Acionada por window.iniciarTransicaoCortina() (ver
+   script inline no index.html; chamada pelo auth.js após login).
+   ========================================================= */
+.vault-transicao {
+  position: fixed;
+  inset: 0;
+  z-index: 99998;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.vault-transicao.vault-ativa {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.vault-fundo {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, #1c2c5c 0%, #0b1220 70%);
+  clip-path: circle(150% at 50% 50%);
+  transition: clip-path 0.7s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.vault-transicao.vault-revelando .vault-fundo {
+  clip-path: circle(0% at 50% 50%);
+}
+
+.vault-conteudo {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+}
+
+.vault-cofre {
+  position: relative;
+  width: 84px;
+  height: 92px;
+  transform: scale(0.8);
+  opacity: 0;
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+}
+.vault-transicao.vault-ativa .vault-cofre {
+  transform: scale(1);
+  opacity: 1;
+}
+
+.vault-cadeado {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.45));
+}
+.vault-argola {
+  transform-origin: 42px 44px;
+  transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.vault-transicao.vault-aberta .vault-argola {
+  transform: translateY(-9px) rotate(-28deg);
+}
+
+.vault-chave {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-130px, -50%) rotate(0deg);
+  opacity: 0;
+  transition: transform 0.5s cubic-bezier(0.65, 0, 0.35, 1), opacity 0.25s ease;
+}
+.vault-transicao.vault-ativa .vault-chave {
+  opacity: 1;
+  transform: translate(-4px, -50%) rotate(0deg);
+}
+.vault-transicao.vault-girando .vault-chave {
+  transform: translate(-4px, -50%) rotate(90deg);
+}
+
+.vault-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 42%, rgba(111, 140, 255, 0.55) 0%, rgba(111, 140, 255, 0) 55%);
+  opacity: 0;
+  pointer-events: none;
+}
+.vault-transicao.vault-aberta .vault-flash {
+  animation: vault-flash-anim 0.55s ease;
+}
+@keyframes vault-flash-anim {
+  0% { opacity: 0; }
+  35% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.vault-texto {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 0.02em;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.vault-transicao.vault-ativa .vault-texto {
+  opacity: 1;
+}
+
+/* =========================================================
    Arquitetura de Variáveis (Suporte Nativo a Temas)
    ========================================================= */
 :root {

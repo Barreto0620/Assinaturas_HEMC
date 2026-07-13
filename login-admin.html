@@ -16,6 +16,14 @@
           document.documentElement.setAttribute('data-theme', temaSalvo);
         }
       } catch (e) {}
+
+      // Vídeo de abertura — evita o flash do overlay para quem já
+      // assistiu (persistido em localStorage: uma vez só, para sempre).
+      try {
+        if (localStorage.getItem('hemc-intro-assistido') === '1') {
+          document.documentElement.classList.add('sem-intro');
+        }
+      } catch (e) {}
     })();
   </script>
 
@@ -33,40 +41,231 @@
     .mensagem-erro, .mensagem-sucesso { order: 4; }
 
     /* =========================================================
-       Logo institucional — canto superior esquerdo
+       Marca institucional — canto superior esquerdo, sobre a foto
+       (mesmo padrão visual do index.html)
        ========================================================= */
     .logo-institucional {
       position: fixed;
-      top: 20px;
-      left: 20px;
+      top: 24px;
+      left: 24px;
       z-index: 100;
       display: flex;
       align-items: center;
+      gap: 12px;
+      background: rgba(5, 8, 15, 0.4);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 8px 16px 8px 8px;
     }
     .logo-institucional img {
-      height: 72px;
+      height: 40px;
       width: auto;
       display: block;
+      border-radius: 6px;
+    }
+    .logo-institucional .marca-texto {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.2;
+    }
+    .logo-institucional .marca-titulo {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      color: #ffffff;
+      text-transform: uppercase;
+    }
+    .logo-institucional .marca-subtitulo {
+      font-size: 10.5px;
+      color: rgba(255, 255, 255, 0.72);
     }
     @media (max-width: 600px) {
       .logo-institucional {
         top: 12px;
         left: 12px;
+        padding: 6px 12px 6px 6px;
       }
       .logo-institucional img {
-        height: 52px;
+        height: 32px;
       }
+      .logo-institucional .marca-titulo {
+        font-size: 11.5px;
+      }
+      .logo-institucional .marca-subtitulo {
+        display: none;
+      }
+    }
+
+    /* =========================================================
+       Banner de consentimento — cache local e armazenamento de dados
+       ========================================================= */
+    .banner-consentimento {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 2000;
+      display: flex;
+      justify-content: center;
+      padding: 16px;
+      transform: translateY(120%);
+      transition: transform 0.35s ease;
+    }
+    .banner-consentimento.visivel {
+      transform: translateY(0);
+    }
+    .banner-consentimento-caixa {
+      width: 100%;
+      max-width: 760px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      background: #1c1f2e;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 12px;
+      padding: 16px 20px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+    }
+    .banner-consentimento-icone {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(79, 109, 245, 0.12);
+      color: #4f6df5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .banner-consentimento-texto {
+      flex: 1;
+      min-width: 0;
+    }
+    .banner-consentimento-texto p {
+      margin: 0;
+      font-size: 12.5px;
+      line-height: 1.55;
+      color: #cbd3e6;
+    }
+    .banner-consentimento-texto strong {
+      color: #f1f5f9;
+    }
+    .banner-consentimento-acoes {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn-aceitar-consentimento {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      background: #4f6df5;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background-color 0.15s ease;
+    }
+    .btn-aceitar-consentimento:hover {
+      background: #3d5adf;
+    }
+
+    @media (max-width: 640px) {
+      .banner-consentimento-caixa {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+      }
+      .banner-consentimento-acoes {
+        width: 100%;
+      }
+      .btn-aceitar-consentimento {
+        width: 100%;
+      }
+    }
+
+    [data-theme="light"] .banner-consentimento-caixa {
+      background: #ffffff;
+      border-color: #e2e5ec;
+      box-shadow: 0 16px 40px rgba(20, 24, 40, 0.14);
+    }
+    [data-theme="light"] .banner-consentimento-texto p {
+      color: #4a4f63;
+    }
+    [data-theme="light"] .banner-consentimento-texto strong {
+      color: #1a1a2e;
+    }
+
+    /* =========================================================
+       Toast de confirmação — exibido após aceitar o consentimento
+       ========================================================= */
+    .toast-confirmacao {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      z-index: 2100;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: #16311f;
+      border: 1px solid rgba(46, 157, 92, 0.4);
+      color: #d8f5e3;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 12px 20px;
+      border-radius: 10px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+      opacity: 0;
+      transform: translate(-50%, -12px);
+      pointer-events: none;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    .toast-confirmacao.visivel {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+    .toast-confirmacao svg {
+      flex-shrink: 0;
+      color: #2e9d5c;
+    }
+    [data-theme="light"] .toast-confirmacao {
+      background: #eafaf0;
+      border-color: rgba(46, 157, 92, 0.3);
+      color: #1a5c34;
     }
   </style>
 </head>
 
 <body>
 
-  <div class="logo-institucional">
-    <img src="img/logo_assina.png" alt="Logo Hospital Estadual Mário Covas">
+  <!-- Vídeo de Abertura — tela cheia, autoplay mudo, com botão de pular. -->
+  <div class="intro-video-overlay" id="intro-video-overlay">
+    <video id="intro-video" autoplay muted playsinline preload="auto">
+      <source src="img/video_background.mp4" type="video/mp4">
+    </video>
+    <button type="button" class="intro-video-skip" id="intro-video-skip" aria-label="Pular vídeo de abertura">
+      Pular vídeo
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="5 4 15 12 5 20 5 4"></polygon>
+        <line x1="19" y1="5" x2="19" y2="19"></line>
+      </svg>
+    </button>
   </div>
 
   <div class="login-wrapper">
+
+    <!-- Marca Institucional — canto superior esquerdo, sobre a imagem -->
+    <div class="logo-institucional">
+      <img src="img/logo_assina.png" alt="Logo Hospital Estadual Mário Covas">
+      <div class="marca-texto">
+        <span class="marca-titulo">HEMC · Painel Admin</span>
+        <span class="marca-subtitulo">Hospital Estadual Mário Covas</span>
+      </div>
+    </div>
 
     <button type="button" class="login-theme-toggle" id="btn-tema-login" aria-label="Alternar tema claro/escuro">
       <svg id="sun-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -86,8 +285,20 @@
     </button>
 
     <div class="login-card">
-      <h1 id="titulo-form">Painel Admin</h1>
-      <p class="subtitulo" id="subtitulo-form">Acesso restrito para gestão e administração</p>
+
+      <div class="login-card-header">
+        <span class="login-card-badge" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="10" width="16" height="10" rx="2"></rect>
+            <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
+            <circle cx="12" cy="15" r="1.6"></circle>
+          </svg>
+        </span>
+        <div>
+          <h1 id="titulo-form">Painel Administrativo</h1>
+          <p class="subtitulo" id="subtitulo-form">Acesso restrito para gestão e administração</p>
+        </div>
+      </div>
 
       <form id="form-auth">
 
@@ -110,6 +321,18 @@
 
         <div id="msg-erro" class="mensagem-erro"></div>
       </form>
+
+      <!-- Selos de confiança -->
+      <div class="login-trust-row">
+        <span class="login-trust-item">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+          Conexão segura (SSL)
+        </span>
+        <span class="login-trust-item">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+          Conforme a LGPD
+        </span>
+      </div>
     </div>
 
     <a href="https://github.com/Barreto0620" target="_blank" rel="noopener noreferrer" class="developer-badge" title="Ver portfólio no GitHub">
@@ -124,6 +347,166 @@
       </div>
     </a>
   </div>
+
+  <!-- Banner de Consentimento — cache local e armazenamento de dados -->
+  <div class="banner-consentimento" id="banner-consentimento" role="dialog" aria-live="polite" aria-label="Aviso de armazenamento de dados">
+    <div class="banner-consentimento-caixa">
+      <div class="banner-consentimento-icone" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+          <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+          <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+        </svg>
+      </div>
+      <div class="banner-consentimento-texto">
+        <p><strong>Privacidade e uso de dados.</strong> Guardamos suas preferências (como tema claro/escuro) no armazenamento local do seu navegador, e seu e-mail administrativo é usado exclusivamente para autenticar seu acesso ao painel de gestão. Ao continuar, você confirma estar ciente disso.</p>
+      </div>
+      <div class="banner-consentimento-acoes">
+        <button type="button" class="btn-aceitar-consentimento" id="btn-aceitar-consentimento">Entendi e aceito</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast de confirmação — some sozinho após alguns segundos -->
+  <div class="toast-confirmacao" id="toast-confirmacao" role="status" aria-live="polite">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 6 9 17l-5-5"></path>
+    </svg>
+    <span id="toast-confirmacao-texto">Preferências salvas com sucesso.</span>
+  </div>
+
+  <!-- Transição "Cofre" — cadeado + chave, acionada por
+       window.iniciarTransicaoCortina() após login de administrador
+       validado com sucesso. -->
+  <div class="vault-transicao" id="vault-transicao" aria-hidden="true">
+    <div class="vault-fundo"></div>
+    <div class="vault-conteudo">
+      <div class="vault-cofre">
+        <svg class="vault-cadeado" width="84" height="88" viewBox="0 0 84 88" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="10" y="42" width="64" height="40" rx="9" fill="#16224a" stroke="#8fa4ff" stroke-width="3"/>
+          <path class="vault-argola" d="M22 42V30a20 20 0 0 1 40 0v12" stroke="#8fa4ff" stroke-width="6" fill="none" stroke-linecap="round"/>
+          <circle cx="42" cy="58" r="6" fill="#f5c451"/>
+          <rect x="39" y="60" width="6" height="12" rx="3" fill="#f5c451"/>
+        </svg>
+        <svg class="vault-chave" width="60" height="22" viewBox="0 0 60 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="10" cy="11" r="8" stroke="#f5c451" stroke-width="4" fill="none"/>
+          <line x1="18" y1="11" x2="52" y2="11" stroke="#f5c451" stroke-width="4" stroke-linecap="round"/>
+          <line x1="40" y1="11" x2="40" y2="18" stroke="#f5c451" stroke-width="4" stroke-linecap="round"/>
+          <line x1="48" y1="11" x2="48" y2="18" stroke="#f5c451" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <span class="vault-texto" id="vault-texto">Verificando credenciais...</span>
+    </div>
+    <div class="vault-flash"></div>
+  </div>
+
+  <script>
+    // =========================================================
+    // Vídeo de abertura — lógica inline (sem depender de arquivo
+    // externo, mesma técnica usada no index.html — evita risco de
+    // 404 no deploy travar a intro). Timer de segurança incluso.
+    // =========================================================
+    (function () {
+      const CHAVE_ARMAZENAMENTO = "hemc-intro-assistido";
+      const ATRASO_BOTAO_MS = 1200;
+      const DURACAO_FADE_MS = 500;
+      const TIMEOUT_SEGURANCA_MS = 20000;
+
+      function jaAssistiu() {
+        try {
+          return localStorage.getItem(CHAVE_ARMAZENAMENTO) === "1";
+        } catch (e) {
+          return false;
+        }
+      }
+
+      function marcarComoAssistido() {
+        try {
+          localStorage.setItem(CHAVE_ARMAZENAMENTO, "1");
+        } catch (e) {}
+      }
+
+      if (jaAssistiu()) return;
+
+      const overlay = document.getElementById("intro-video-overlay");
+      const video = document.getElementById("intro-video");
+      const btnPular = document.getElementById("intro-video-skip");
+
+      if (!overlay || !video || !btnPular) return;
+
+      document.body.style.overflow = "hidden";
+
+      const timeoutBotao = setTimeout(() => {
+        btnPular.classList.add("intro-skip-visivel");
+      }, ATRASO_BOTAO_MS);
+
+      let encerrado = false;
+
+      function encerrarIntro() {
+        if (encerrado) return;
+        encerrado = true;
+
+        clearTimeout(timeoutBotao);
+        clearTimeout(timeoutSeguranca);
+        marcarComoAssistido();
+
+        overlay.classList.add("intro-saindo");
+        document.body.style.overflow = "";
+
+        setTimeout(() => {
+          overlay.remove();
+        }, DURACAO_FADE_MS);
+      }
+
+      const timeoutSeguranca = setTimeout(encerrarIntro, TIMEOUT_SEGURANCA_MS);
+
+      btnPular.addEventListener("click", encerrarIntro);
+      video.addEventListener("ended", encerrarIntro);
+      video.addEventListener("error", encerrarIntro);
+
+      const promessaReproducao = video.play();
+      if (promessaReproducao && typeof promessaReproducao.catch === "function") {
+        promessaReproducao.catch(encerrarIntro);
+      }
+    })();
+  </script>
+
+  <script>
+    // -------------------------------------------------------------
+    // 🔐 Transição "Cofre" — usada ao navegar para o painel após
+    // login de administrador validado. Exposta globalmente para ser
+    // acionada pelo módulo de autenticação abaixo.
+    // -------------------------------------------------------------
+    window.iniciarTransicaoCortina = function (destino, atrasoTotal) {
+      const overlay = document.getElementById("vault-transicao");
+      const textoEl = document.getElementById("vault-texto");
+      const tempoTotal = typeof atrasoTotal === "number" ? atrasoTotal : 1950;
+
+      if (!overlay) {
+        window.location.href = destino;
+        return;
+      }
+
+      overlay.classList.add("vault-ativa");
+
+      setTimeout(() => {
+        overlay.classList.add("vault-girando");
+      }, 500);
+
+      setTimeout(() => {
+        overlay.classList.add("vault-aberta");
+        if (textoEl) textoEl.textContent = "Acesso autorizado";
+      }, 900);
+
+      setTimeout(() => {
+        overlay.classList.add("vault-revelando");
+      }, 1300);
+
+      setTimeout(() => {
+        window.location.href = destino;
+      }, tempoTotal);
+    };
+  </script>
 
   <script>
     document.addEventListener("DOMContentLoaded", () => {
@@ -174,6 +557,50 @@
       if (inputEmail) {
         inputEmail.addEventListener("input", (e) => {
           e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9\.\-\_]/g, "");
+        });
+      }
+
+      // -------------------------------------------------------------
+      // 🍪 Banner de consentimento — cache local e armazenamento de dados
+      // -------------------------------------------------------------
+      const CHAVE_CONSENTIMENTO = "hemc-consentimento-dados";
+      const bannerConsentimento = document.getElementById("banner-consentimento");
+      const btnAceitarConsentimento = document.getElementById("btn-aceitar-consentimento");
+
+      function jaConsentiu() {
+        try {
+          return localStorage.getItem(CHAVE_CONSENTIMENTO) === "aceito";
+        } catch (e) {
+          return true;
+        }
+      }
+
+      function registrarConsentimento() {
+        try {
+          localStorage.setItem(CHAVE_CONSENTIMENTO, "aceito");
+        } catch (e) {}
+      }
+
+      function exibirToastConfirmacao(mensagem) {
+        const toast = document.getElementById("toast-confirmacao");
+        const toastTexto = document.getElementById("toast-confirmacao-texto");
+        if (!toast || !toastTexto) return;
+
+        toastTexto.textContent = mensagem;
+        toast.classList.add("visivel");
+
+        setTimeout(() => {
+          toast.classList.remove("visivel");
+        }, 2800);
+      }
+
+      if (bannerConsentimento && btnAceitarConsentimento && !jaConsentiu()) {
+        setTimeout(() => bannerConsentimento.classList.add("visivel"), 300);
+
+        btnAceitarConsentimento.addEventListener("click", () => {
+          registrarConsentimento();
+          bannerConsentimento.classList.remove("visivel");
+          exibirToastConfirmacao("Preferências salvas com sucesso.");
         });
       }
     });
@@ -229,15 +656,20 @@
           throw new Error('Acesso negado. Você não tem permissão de administrador.');
         }
 
-        // 3. Sucesso! Redireciona para o painel principal
-        window.location.href = '/admin.html';
+        // 3. Sucesso! Dispara a transição "cofre" e então navega para o painel.
+        // Se a função não existir por algum motivo, cai no redirecionamento direto.
+        if (typeof window.iniciarTransicaoCortina === 'function') {
+          window.iniciarTransicaoCortina('/admin.html');
+        } else {
+          window.location.href = '/admin.html';
+        }
 
       } catch (error) {
         msgErro.textContent = error.message;
         msgErro.classList.add('visivel');
-      } finally {
         btnSubmit.textContent = 'Acessar Painel';
         btnSubmit.disabled = false;
+        return;
       }
     });
   </script>
