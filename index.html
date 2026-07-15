@@ -129,17 +129,47 @@
        Status de verificação do Cargo institucional (automático)
        ========================================================= */
     #cargo {
-      transition: border-color 0.2s ease, background-color 0.2s ease;
+      transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
       cursor: not-allowed;
     }
+
+    /* Correção de contraste (modo escuro): antes, o "background" verde
+       translúcido substituía o fundo sólido do input inteiro (a regra
+       de ID tem mais prioridade que ".campo input"), deixando a foto de
+       fundo do login vazar através do card e do campo — resultado: texto
+       verde-escuro sobre fundo quase transparente, ilegível. Agora o
+       fundo sólido do tema é preservado, e a cor (verde/vermelho) entra
+       apenas como uma "lavagem" por cima via box-shadow inset, mantendo
+       opacidade total no texto em qualquer tema. */
     #cargo.campo-validado {
       border-color: #2e7d4f;
-      background: rgba(46, 125, 79, 0.08);
+      background-color: var(--input-bg);
+      box-shadow: inset 0 0 0 9999px rgba(46, 125, 79, 0.14);
+      color: #eafff2;
+      font-weight: 600;
       cursor: default;
+      -webkit-text-fill-color: #eafff2;
+      opacity: 1;
     }
     #cargo.campo-nao-localizado {
-      border-color: #c0392b;
-      background: rgba(192, 57, 43, 0.08);
+      border-color: #e0473a;
+      background-color: var(--input-bg);
+      box-shadow: inset 0 0 0 9999px rgba(224, 71, 58, 0.14);
+      color: #ffece9;
+      font-weight: 600;
+      -webkit-text-fill-color: #ffece9;
+      opacity: 1;
+    }
+
+    /* No tema claro, texto branco ficaria ilegível sobre o fundo claro —
+       usa tons escuros e saturados de verde/vermelho em vez de claros. */
+    [data-theme="light"] #cargo.campo-validado {
+      color: #1c6b40;
+      -webkit-text-fill-color: #1c6b40;
+    }
+    [data-theme="light"] #cargo.campo-nao-localizado {
+      color: #9a2c22;
+      -webkit-text-fill-color: #9a2c22;
     }
 
     /* =========================================================
